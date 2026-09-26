@@ -1,3 +1,0 @@
-"""
-Repolytic Test Suite Package
-"""

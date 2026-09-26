@@ -1,0 +1,3 @@
+"""
+Retrieval & Search Sub-service
+"""
