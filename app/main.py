@@ -1,6 +1,6 @@
 import uuid
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, status, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
@@ -37,15 +37,21 @@ app.add_middleware(
 )
 
 # Standard Error Exception Handler
+@app.exception_handler(HTTPException)
 @app.exception_handler(Exception)
 async def custom_exception_handler(request: Request, exc: Exception):
     req_id = f"req_{uuid.uuid4().hex[:12]}"
 
-    if hasattr(exc, "status_code") and hasattr(exc, "detail") and isinstance(exc.detail, dict):
+    if isinstance(exc, HTTPException):
         status_code = exc.status_code
-        error_code = exc.detail.get("code", "REQUEST_ERROR")
-        message = exc.detail.get("message", "An error occurred processing the request.")
-        details = exc.detail.get("details", {})
+        if isinstance(exc.detail, dict):
+            error_code = exc.detail.get("code", "REQUEST_ERROR")
+            message = exc.detail.get("message", "An error occurred processing the request.")
+            details = exc.detail.get("details", {})
+        else:
+            error_code = "HTTP_ERROR"
+            message = str(exc.detail)
+            details = {}
     else:
         status_code = getattr(exc, "status_code", status.HTTP_500_INTERNAL_SERVER_ERROR)
         error_code = "INTERNAL_ERROR" if status_code == 500 else "REQUEST_FAILED"

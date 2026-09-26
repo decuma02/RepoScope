@@ -8,7 +8,9 @@ class RelationshipExtractor:
     Extracts relationship edges (IMPORTS, EXPORTS, USES) between files and code components.
     """
 
-    PYTHON_IMPORT_PATTERN = re.compile(r"^\s*(?:from\s+([a-zA-Z0-9_\.]+)\s+import|import\s+([a-zA-Z0-9_\.]+))", re.MULTILINE)
+    PYTHON_FROM_IMPORT_PATTERN = re.compile(r"^\s*from\s+([a-zA-Z0-9_\.]+)\s+import\s+([a-zA-Z0-9_\.,\s\*]+)", re.MULTILINE)
+    PYTHON_DIRECT_IMPORT_PATTERN = re.compile(r"^\s*import\s+([a-zA-Z0-9_\.]+)", re.MULTILINE)
+
     JS_IMPORT_PATTERN = re.compile(r"^\s*import\s+.*?from\s+['\"]([^'\"]+)['\"]", re.MULTILINE)
     JS_REQUIRE_PATTERN = re.compile(r"^\s*(?:const|let|var)\s+.*?=\s*require\(['\"]([^'\"]+)['\"]\)", re.MULTILINE)
 
@@ -16,26 +18,50 @@ class RelationshipExtractor:
     def extract_relationships(
         cls,
         repo_id: str,
-        files_map: Dict[str, Dict[str, Any]],  # rel_path -> file_dict
+        files_map: Dict[str, Dict[str, Any]],  # file_id -> file_dict
         components_by_file: Dict[str, List[Dict[str, Any]]], # file_id -> components
         file_contents: Dict[str, str] # file_id -> content
     ) -> List[Dict[str, Any]]:
         relationships = []
 
-        # Create path lookup helpers
-        rel_path_to_file_id = {info["relative_path"]: file_id for file_id, info in files_map.items()}
+        # Create path lookup helpers safely
+        rel_path_to_file_id = {
+            (info.get("relative_path") or info.get("path")): file_id 
+            for file_id, info in files_map.items()
+        }
 
         for file_id, file_info in files_map.items():
             content = file_contents.get(file_id, "")
-            rel_path = file_info["relative_path"]
+            rel_path = file_info.get("relative_path") or file_info.get("path", "")
 
-            # Extract IMPORTS & EXPORTS
             lines = content.splitlines()
             for line_no, line in enumerate(lines, start=1):
-                # Python Imports
-                py_match = cls.PYTHON_IMPORT_PATTERN.search(line)
-                if py_match:
-                    mod = py_match.group(1) or py_match.group(2)
+                # Python From Imports (e.g. from app import user or from app.user import user_service)
+                from_match = cls.PYTHON_FROM_IMPORT_PATTERN.search(line)
+                if from_match:
+                    pkg = from_match.group(1)
+                    items = [i.strip() for i in from_match.group(2).split(',')]
+                    for item in items:
+                        target_file_id = cls._resolve_python_import(f"{pkg}.{item}", rel_path, rel_path_to_file_id) or \
+                                         cls._resolve_python_import(pkg, rel_path, rel_path_to_file_id)
+                        if target_file_id and target_file_id != file_id:
+                            relationships.append({
+                                "id": f"rel_{uuid.uuid4().hex[:12]}",
+                                "repository_id": repo_id,
+                                "source_type": "file",
+                                "source_id": file_id,
+                                "target_type": "file",
+                                "target_id": target_file_id,
+                                "type": RelationshipType.IMPORTS,
+                                "confidence": 0.95,
+                                "source_line": line_no,
+                                "evidence": f"Import statement on line {line_no}: {line.strip()}"
+                            })
+
+                # Python Direct Imports (e.g. import app.user)
+                direct_match = cls.PYTHON_DIRECT_IMPORT_PATTERN.search(line)
+                if direct_match and not from_match:
+                    mod = direct_match.group(1)
                     target_file_id = cls._resolve_python_import(mod, rel_path, rel_path_to_file_id)
                     if target_file_id and target_file_id != file_id:
                         relationships.append({
@@ -70,14 +96,13 @@ class RelationshipExtractor:
                             "evidence": f"Import/require on line {line_no}: {line.strip()}"
                         })
 
-            # Approximate symbol USES matching (P1 capability)
+            # Approximate symbol USES matching
             for other_file_id, components in components_by_file.items():
                 if other_file_id == file_id:
                     continue
                 for comp in components:
                     comp_name = comp["name"]
                     if len(comp_name) >= 4 and comp_name in content:
-                        # Simple keyword usage match
                         relationships.append({
                             "id": f"rel_{uuid.uuid4().hex[:12]}",
                             "repository_id": repo_id,
@@ -102,7 +127,9 @@ class RelationshipExtractor:
         possible_rel_2 = "/".join(parts) + "/__init__.py"
 
         for rel_path, file_id in path_map.items():
-            if rel_path == possible_rel_1 or rel_path == possible_rel_2 or rel_path.endswith("/" + possible_rel_1):
+            if not rel_path:
+                continue
+            if rel_path == possible_rel_1 or rel_path == possible_rel_2 or rel_path.endswith("/" + possible_rel_1) or rel_path.endswith("/" + possible_rel_2):
                 return file_id
         return None
 
@@ -119,6 +146,8 @@ class RelationshipExtractor:
         for ext in possible_exts:
             test_path = candidate + ext
             for rel_path, file_id in path_map.items():
+                if not rel_path:
+                    continue
                 if rel_path == test_path or rel_path.endswith(test_path):
                     return file_id
         return None
