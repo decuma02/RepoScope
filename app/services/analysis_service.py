@@ -16,20 +16,17 @@ class AnalysisService:
     def trigger_analysis(conn: sqlite3.Connection, repo_id: str, force: bool = False) -> Optional[AnalysisJobResponse]:
         cursor = conn.cursor()
 
-        # Fetch repo record
         cursor.execute("SELECT * FROM repositories WHERE id = ?", (repo_id,))
         repo = cursor.fetchone()
         if not repo:
             return None
 
-        # Check if already analyzing
         if repo["status"] == RepositoryStatus.ANALYZING.value and not force:
             cursor.execute("SELECT id FROM analysis_jobs WHERE repository_id = ? AND status = ?", (repo_id, RepositoryStatus.ANALYZING.value))
             existing = cursor.fetchone()
             if existing:
                 return AnalysisService.get_job_status(conn, existing["id"])
 
-        # Create new Job
         job_id = f"job_{uuid.uuid4().hex[:12]}"
         now = datetime.now(timezone.utc).isoformat()
 
@@ -45,7 +42,6 @@ class AnalysisService:
         cursor.execute("UPDATE repositories SET status = ? WHERE id = ?", (RepositoryStatus.ANALYZING.value, repo_id))
         conn.commit()
 
-        # Run analysis (Synchronous for fast prototype / small repos, background ready)
         AnalysisService.run_analysis_pipeline(conn, repo_id, job_id, repo["source_path"])
 
         return AnalysisService.get_job_status(conn, job_id)
@@ -99,7 +95,7 @@ class AnalysisService:
             )
             conn.commit()
 
-            # Stage 2: Structure Extraction & File Record Creation
+            # Stage 2: Structure Extraction & Chunking
             files_map = {}
             components_by_file = {}
             file_contents = {}
@@ -110,7 +106,6 @@ class AnalysisService:
                 rel_path = f_info["relative_path"]
                 full_path = f_info["full_path"]
 
-                # Read text safely
                 content = ""
                 try:
                     with open(full_path, 'r', encoding='utf-8', errors='replace') as f:
@@ -129,7 +124,6 @@ class AnalysisService:
                     "status": "READY"
                 }
 
-                # Insert File
                 cursor.execute(
                     """
                     INSERT INTO files (id, repository_id, path, language, extension, size_bytes, status)
@@ -150,6 +144,22 @@ class AnalysisService:
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (c["id"], c["file_id"], c["repository_id"], c["name"], c["type"].value if hasattr(c["type"], "value") else c["type"], c["start_line"], c["end_line"], c["signature"], c["summary"])
+                    )
+
+                # Generate & Persist Content Chunks (~30 lines each)
+                lines = content.splitlines()
+                chunk_size = 30
+                for start_i in range(0, max(1, len(lines)), chunk_size):
+                    chunk_lines = lines[start_i:start_i + chunk_size]
+                    chunk_text = "\n".join(chunk_lines)
+                    chunk_id = f"chk_{uuid.uuid4().hex[:12]}"
+                    token_estimate = len(chunk_text.split())
+                    cursor.execute(
+                        """
+                        INSERT INTO content_chunks (id, repository_id, file_id, start_line, end_line, text, token_estimate)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (chunk_id, repo_id, file_id, start_i + 1, min(len(lines), start_i + chunk_size), chunk_text, token_estimate)
                     )
 
             cursor.execute(

@@ -77,6 +77,21 @@ def init_db():
     )
     """)
 
+    # Content Chunks Table (Section 6 entity)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS content_chunks (
+        id TEXT PRIMARY KEY,
+        repository_id TEXT NOT NULL,
+        file_id TEXT NOT NULL,
+        start_line INTEGER NOT NULL,
+        end_line INTEGER NOT NULL,
+        text TEXT NOT NULL,
+        token_estimate INTEGER DEFAULT 0,
+        FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
+        FOREIGN KEY (repository_id) REFERENCES repositories(id) ON DELETE CASCADE
+    )
+    """)
+
     # Relationships Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS relationships (
