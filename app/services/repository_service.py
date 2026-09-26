@@ -2,8 +2,12 @@ import uuid
 from datetime import datetime, timezone
 import sqlite3
 from typing import Optional, List, Dict, Any
-from app.models.domain import RepositoryStatus
-from app.models.api import RepositoryCreateRequest, RepositoryResponse, RepositoryCountsDTO, TreeNodeDTO, FileDetailResponse, ComponentDTO
+from app.models.domain import RepositoryStatus, RelationshipType, ComponentType
+from app.models.api import (
+    RepositoryCreateRequest, RepositoryResponse, RepositoryCountsDTO,
+    TreeNodeDTO, FileDetailResponse, ComponentDTO, ComponentListResponse,
+    RelationshipDTO, RelationshipListResponse
+)
 from app.security.repository_boundary import RepositoryBoundaryValidator, RepositoryBoundaryError
 
 class RepositoryService:
@@ -130,7 +134,6 @@ class RepositoryService:
                 if i == 0:
                     if curr_path not in root_nodes:
                         root_nodes[curr_path] = node
-                # Note: A full recursive hierarchy map can be attached if children exist
 
         return list(root_nodes.values())
 
@@ -144,29 +147,24 @@ class RepositoryService:
     ) -> Optional[FileDetailResponse]:
         cursor = conn.cursor()
 
-        # Fetch file record
         cursor.execute("SELECT * FROM files WHERE id = ? AND repository_id = ?", (file_id, repo_id))
         file_row = cursor.fetchone()
         if not file_row:
             return None
 
-        # Fetch repo record for root path
         cursor.execute("SELECT source_path FROM repositories WHERE id = ?", (repo_id,))
         repo_row = cursor.fetchone()
         if not repo_row:
             return None
 
-        # Fetch components
-        cursor.execute(
-            "SELECT * FROM components WHERE file_id = ? AND repository_id = ?", (file_id, repo_id)
-        )
+        cursor.execute("SELECT * FROM components WHERE file_id = ? AND repository_id = ?", (file_id, repo_id))
         comp_rows = cursor.fetchall()
         components = [
             ComponentDTO(
                 id=c["id"],
                 fileId=c["file_id"],
                 name=c["name"],
-                type=c["type"],
+                type=ComponentType(c["type"]),
                 startLine=c["start_line"],
                 endLine=c["end_line"],
                 signature=c["signature"],
@@ -175,7 +173,6 @@ class RepositoryService:
             for c in comp_rows
         ]
 
-        # Read excerpt safely
         excerpt = None
         full_file_path = RepositoryBoundaryValidator.resolve_safe_path(repo_row["source_path"], file_row["path"])
 
@@ -201,3 +198,76 @@ class RepositoryService:
             startLine=start_line or 1,
             endLine=end_line
         )
+
+    @staticmethod
+    def get_components(conn: sqlite3.Connection, repo_id: str, comp_type: Optional[str] = None) -> ComponentListResponse:
+        cursor = conn.cursor()
+        if comp_type:
+            cursor.execute("SELECT * FROM components WHERE repository_id = ? AND type = ?", (repo_id, comp_type))
+        else:
+            cursor.execute("SELECT * FROM components WHERE repository_id = ?", (repo_id,))
+        rows = cursor.fetchall()
+        comps = [
+            ComponentDTO(
+                id=c["id"],
+                fileId=c["file_id"],
+                name=c["name"],
+                type=ComponentType(c["type"]),
+                startLine=c["start_line"],
+                endLine=c["end_line"],
+                signature=c["signature"],
+                summary=c["summary"]
+            )
+            for c in rows
+        ]
+        return ComponentListResponse(repositoryId=repo_id, components=comps)
+
+    @staticmethod
+    def get_relationships(conn: sqlite3.Connection, repo_id: str, rel_type: Optional[str] = None) -> RelationshipListResponse:
+        cursor = conn.cursor()
+        if rel_type:
+            cursor.execute("SELECT * FROM relationships WHERE repository_id = ? AND type = ?", (repo_id, rel_type))
+        else:
+            cursor.execute("SELECT * FROM relationships WHERE repository_id = ?", (repo_id,))
+        rows = cursor.fetchall()
+        rels = [
+            RelationshipDTO(
+                id=r["id"],
+                repositoryId=r["repository_id"],
+                sourceType=r["source_type"],
+                sourceId=r["source_id"],
+                targetType=r["target_type"],
+                targetId=r["target_id"],
+                type=RelationshipType(r["type"]),
+                confidence=r["confidence"],
+                sourceLine=r["source_line"],
+                evidence=r["evidence"]
+            )
+            for r in rows
+        ]
+        return RelationshipListResponse(repositoryId=repo_id, relationships=rels)
+
+    @staticmethod
+    def reset_repository(conn: sqlite3.Connection, repo_id: str) -> bool:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM files WHERE repository_id = ?", (repo_id,))
+        cursor.execute("DELETE FROM components WHERE repository_id = ?", (repo_id,))
+        cursor.execute("DELETE FROM content_chunks WHERE repository_id = ?", (repo_id,))
+        cursor.execute("DELETE FROM relationships WHERE repository_id = ?", (repo_id,))
+        cursor.execute("DELETE FROM analysis_jobs WHERE repository_id = ?", (repo_id,))
+        cursor.execute(
+            """
+            UPDATE repositories SET
+                status = 'CREATED',
+                analyzed_at = NULL,
+                files_discovered = 0,
+                files_analyzed = 0,
+                files_skipped = 0,
+                components_found = 0,
+                relationships_found = 0
+            WHERE id = ?
+            """,
+            (repo_id,)
+        )
+        conn.commit()
+        return True

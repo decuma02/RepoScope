@@ -2,7 +2,10 @@ import sqlite3
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from app.core.database import get_db
-from app.models.api import RepositoryCreateRequest, RepositoryResponse, RepositoryListResponse, TreeResponse, FileDetailResponse
+from app.models.api import (
+    RepositoryCreateRequest, RepositoryResponse, RepositoryListResponse,
+    TreeResponse, FileDetailResponse, ComponentListResponse, RelationshipListResponse
+)
 from app.services.repository_service import RepositoryService
 from app.security.repository_boundary import RepositoryBoundaryError
 
@@ -64,3 +67,34 @@ def get_file_detail(
             detail={"code": "FILE_NOT_FOUND", "message": f"File '{file_id}' not found in repository '{id}'."}
         )
     return detail
+
+@router.get("/{id}/components", response_model=ComponentListResponse)
+def get_components(id: str, type: Optional[str] = Query(None), db: sqlite3.Connection = Depends(get_db)):
+    repo = RepositoryService.get_repository(db, id)
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "REPOSITORY_NOT_FOUND", "message": f"Repository with id '{id}' not found."}
+        )
+    return RepositoryService.get_components(db, id, type)
+
+@router.get("/{id}/relationships", response_model=RelationshipListResponse)
+def get_relationships(id: str, type: Optional[str] = Query(None), db: sqlite3.Connection = Depends(get_db)):
+    repo = RepositoryService.get_repository(db, id)
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "REPOSITORY_NOT_FOUND", "message": f"Repository with id '{id}' not found."}
+        )
+    return RepositoryService.get_relationships(db, id, type)
+
+@router.post("/{id}/reset", status_code=status.HTTP_200_OK)
+def reset_repository(id: str, db: sqlite3.Connection = Depends(get_db)):
+    repo = RepositoryService.get_repository(db, id)
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "REPOSITORY_NOT_FOUND", "message": f"Repository with id '{id}' not found."}
+        )
+    RepositoryService.reset_repository(db, id)
+    return {"message": f"Repository '{id}' index has been reset successfully."}

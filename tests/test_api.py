@@ -46,7 +46,16 @@ def test_repository_lifecycle_e2e():
         assert tree_res.status_code == 200
         assert "tree" in tree_res.json()
 
-        # 6. Run Relationship-Aware Search
+        # 6. Fetch Components & Relationships List
+        comps_res = client.get(f"/api/repositories/{repo_id}/components")
+        assert comps_res.status_code == 200
+        assert "components" in comps_res.json()
+
+        rels_res = client.get(f"/api/repositories/{repo_id}/relationships")
+        assert rels_res.status_code == 200
+        assert "relationships" in rels_res.json()
+
+        # 7. Run Relationship-Aware Search & Compare
         search_res = client.post(f"/api/repositories/{repo_id}/search", json={
             "query": "architecture security boundary database",
             "limit": 5,
@@ -56,7 +65,13 @@ def test_repository_lifecycle_e2e():
         search_data = search_res.json()
         assert "results" in search_data
 
-        # 7. Grounded AI Chat Query
+        compare_res = client.post(f"/api/repositories/{repo_id}/compare-retrieval", json={
+            "query": "architecture boundary"
+        })
+        assert compare_res.status_code == 200
+        assert "differentiationSummary" in compare_res.json()
+
+        # 8. Grounded AI Chat Query
         chat_res = client.post(f"/api/repositories/{repo_id}/chat", json={
             "question": "Where is security boundary implemented and how does it relate to repository ingestion?"
         })
@@ -66,12 +81,16 @@ def test_repository_lifecycle_e2e():
         assert "sources" in chat_data
         assert "graphFocus" in chat_data
 
-        # 8. Focused Graph Query
+        # 9. Focused Graph Query
         graph_res = client.get(f"/api/repositories/{repo_id}/graph")
         assert graph_res.status_code == 200
         graph_data = graph_res.json()
         assert "nodes" in graph_data
         assert "edges" in graph_data
+
+        # 10. Reset Repository
+        reset_res = client.post(f"/api/repositories/{repo_id}/reset")
+        assert reset_res.status_code == 200
 
 def test_invalid_repository_error_format():
     with TestClient(app) as client:
