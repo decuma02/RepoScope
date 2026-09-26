@@ -27,6 +27,10 @@ class RepositoryBoundaryValidator:
 
     @staticmethod
     def is_safe_path(root_path_str: str, relative_or_abs_target: str) -> bool:
+        """
+        Return True only if the target resolves inside the root AND is not a
+        symlink that escapes the root boundary.
+        """
         root_path = Path(root_path_str).resolve()
         target_path = Path(relative_or_abs_target)
 
@@ -37,9 +41,18 @@ class RepositoryBoundaryValidator:
 
         try:
             target_path.relative_to(root_path)
-            return True
         except ValueError:
             return False
+
+        # Reject symlinks whose real target resolves outside the root
+        if target_path.is_symlink():
+            real_target = Path(os.path.realpath(target_path))
+            try:
+                real_target.relative_to(root_path)
+            except ValueError:
+                return False
+
+        return True
 
     @staticmethod
     def resolve_safe_path(root_path_str: str, relative_or_abs_target: str) -> str:
@@ -57,5 +70,15 @@ class RepositoryBoundaryValidator:
             raise RepositoryBoundaryError(
                 f"Path traversal detected: {relative_or_abs_target} resolves outside repository root {root_path_str}"
             )
+
+        # Also reject symlinks that escape the root
+        if target_path.is_symlink():
+            real_target = Path(os.path.realpath(target_path))
+            try:
+                real_target.relative_to(root_path)
+            except ValueError:
+                raise RepositoryBoundaryError(
+                    f"Symlink escape detected: {relative_or_abs_target} points outside repository root {root_path_str}"
+                )
 
         return str(target_path)

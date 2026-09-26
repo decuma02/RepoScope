@@ -9,6 +9,7 @@ from backend.app.schemas.api import (
     RelationshipDTO, RelationshipListResponse
 )
 from backend.app.storage.boundary import RepositoryBoundaryValidator, RepositoryBoundaryError
+from backend.app.services.ingestion.ingestion_service import IngestionService
 
 class RepositoryService:
 
@@ -31,6 +32,11 @@ class RepositoryService:
         )
         conn.commit()
 
+        # Discover and persist file records immediately after registration.
+        files_discovered, files_skipped, _warnings = IngestionService.ingest_repository(
+            conn, repo_id, validated_path
+        )
+
         return RepositoryResponse(
             id=repo_id,
             name=request.name,
@@ -39,7 +45,10 @@ class RepositoryService:
             rootLabel=root_label,
             status=RepositoryStatus.CREATED,
             createdAt=now,
-            counts=RepositoryCountsDTO()
+            counts=RepositoryCountsDTO(
+                filesDiscovered=files_discovered,
+                filesSkipped=files_skipped,
+            )
         )
 
     @staticmethod
