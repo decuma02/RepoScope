@@ -1,0 +1,29 @@
+{
+  "repositoryId": "repo_demo",
+  "tree": [
+    {
+      "id": "dir_backend",
+      "name": "backend",
+      "path": "backend",
+      "isDir": true,
+      "children": [
+        {
+          "id": "file_main",
+          "name": "main.py",
+          "path": "backend/app/main.py",
+          "isDir": false,
+          "language": "py",
+          "sizeBytes": 2048
+        },
+        {
+          "id": "file_boundary",
+          "name": "boundary.py",
+          "path": "backend/app/storage/boundary.py",
+          "isDir": false,
+          "language": "py",
+          "sizeBytes": 1500
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "repositoryId": "repo_demo",
+  "components": [
+    {
+      "id": "comp_1",
+      "fileId": "file_boundary",
+      "name": "RepositoryBoundaryValidator",
+      "type": "class",
+      "startLine": 6,
+      "endLine": 45,
+      "signature": "class RepositoryBoundaryValidator",
+      "summary": "Validates filesystem path boundaries preventing path traversal."
+    },
+    {
+      "id": "comp_2",
+      "fileId": "file_main",
+      "name": "custom_exception_handler",
+      "type": "function",
+      "startLine": 32,
+      "endLine": 55,
+      "signature": "async def custom_exception_handler(request: Request, exc: Exception)",
+      "summary": "Standard error JSON exception handler."
+    }
+  ]
+}

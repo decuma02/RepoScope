@@ -1,0 +1,31 @@
+{
+  "focus": {
+    "type": "file",
+    "id": "file_boundary"
+  },
+  "nodes": [
+    {
+      "id": "file_boundary",
+      "type": "file",
+      "label": "boundary.py",
+      "path": "backend/app/storage/boundary.py",
+      "selected": true
+    },
+    {
+      "id": "file_main",
+      "type": "file",
+      "label": "main.py",
+      "path": "backend/app/main.py",
+      "selected": false
+    }
+  ],
+  "edges": [
+    {
+      "id": "rel_1",
+      "source": "file_main",
+      "target": "file_boundary",
+      "type": "IMPORTS",
+      "confidence": 0.95
+    }
+  ]
+}

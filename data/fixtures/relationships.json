@@ -1,0 +1,17 @@
+{
+  "repositoryId": "repo_demo",
+  "relationships": [
+    {
+      "id": "rel_1",
+      "repositoryId": "repo_demo",
+      "sourceType": "file",
+      "sourceId": "file_main",
+      "targetType": "file",
+      "targetId": "file_boundary",
+      "type": "IMPORTS",
+      "confidence": 0.95,
+      "sourceLine": 12,
+      "evidence": "Import boundary validator on line 12"
+    }
+  ]
+}

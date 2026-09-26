@@ -1,0 +1,27 @@
+{
+  "results": [
+    {
+      "sourceId": "src_file_boundary",
+      "fileId": "file_boundary",
+      "filePath": "backend/app/storage/boundary.py",
+      "componentName": "RepositoryBoundaryValidator",
+      "score": 0.95,
+      "lexicalScore": 0.55,
+      "relationshipBonus": 0.40,
+      "startLine": 1,
+      "endLine": 30,
+      "excerpt": "class RepositoryBoundaryValidator:\n    @staticmethod\n    def validate_repository_root(path_str: str) -> str:",
+      "relevanceReason": "Direct symbol & path match"
+    }
+  ],
+  "relationships": [
+    {
+      "relationshipId": "rel_1",
+      "sourcePath": "backend/app/main.py",
+      "targetPath": "backend/app/storage/boundary.py",
+      "type": "IMPORTS",
+      "confidence": 0.95,
+      "sourceLine": 12
+    }
+  ]
+}
