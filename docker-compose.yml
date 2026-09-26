@@ -1,19 +1,22 @@
 version: '3.8'
 
 services:
-  repolytic-backend:
+  reposcope-backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: repolytic_backend
+    container_name: reposcope_backend
     ports:
       - "8000:8000"
     environment:
-      - ENVIRONMENT=production
-      - LOG_LEVEL=info
-      - DATABASE_PATH=/app/data_store/repolytic.db
+      - REPOSCOPE_ENV=production
+      - REPOSCOPE_LOG_LEVEL=info
+      - REPOSCOPE_DB_PATH=/app/data/index/reposcope.db
+      - WATSONX_APIKEY=${WATSONX_APIKEY:-}
+      - WATSONX_PROJECT_ID=${WATSONX_PROJECT_ID:-}
+      - WATSONX_URL=${WATSONX_URL:-https://us-south.ml.cloud.ibm.com}
     volumes:
-      - backend_data:/app/data_store
+      - reposcope_data:/app/data/index
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
@@ -23,5 +26,5 @@ services:
       start_period: 5s
 
 volumes:
-  backend_data:
+  reposcope_data:
     driver: local
