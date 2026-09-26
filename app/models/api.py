@@ -84,6 +84,26 @@ class ComponentDTO(BaseModel):
     signature: Optional[str] = None
     summary: Optional[str] = None
 
+class ComponentListResponse(BaseModel):
+    repositoryId: str
+    components: List[ComponentDTO]
+
+class RelationshipDTO(BaseModel):
+    id: str
+    repositoryId: str
+    sourceType: str
+    sourceId: str
+    targetType: str
+    targetId: str
+    type: RelationshipType
+    confidence: float
+    sourceLine: Optional[int] = None
+    evidence: Optional[str] = None
+
+class RelationshipListResponse(BaseModel):
+    repositoryId: str
+    relationships: List[RelationshipDTO]
+
 class FileDetailResponse(BaseModel):
     id: str
     repositoryId: str
@@ -127,6 +147,13 @@ class RelationshipEvidenceItem(BaseModel):
 class SearchResponse(BaseModel):
     results: List[SearchResultItem]
     relationships: List[RelationshipEvidenceItem] = []
+
+class RetrievalComparisonResponse(BaseModel):
+    query: str
+    relationshipAwareResults: List[SearchResultItem]
+    textOnlyBaselineResults: List[SearchResultItem]
+    graphExpandedFilesCount: int
+    differentiationSummary: str
 
 # --- AI Chat Schemas ---
 class ChatRequest(BaseModel):

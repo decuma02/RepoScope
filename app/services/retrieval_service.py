@@ -1,6 +1,6 @@
 import sqlite3
 from typing import List, Dict, Any, Set
-from app.models.api import SearchRequest, SearchResponse, SearchResultItem, RelationshipEvidenceItem
+from app.models.api import SearchRequest, SearchResponse, SearchResultItem, RelationshipEvidenceItem, RetrievalComparisonResponse
 from app.security.repository_boundary import RepositoryBoundaryValidator
 
 class RetrievalService:
@@ -15,7 +15,6 @@ class RetrievalService:
     def search(conn: sqlite3.Connection, repo_id: str, request: SearchRequest) -> SearchResponse:
         cursor = conn.cursor()
 
-        # Fetch repo root
         cursor.execute("SELECT source_path FROM repositories WHERE id = ?", (repo_id,))
         repo_row = cursor.fetchone()
         if not repo_row:
@@ -27,7 +26,6 @@ class RetrievalService:
         if not query_terms:
             return SearchResponse(results=[], relationships=[])
 
-        # Step 1: Lexical Candidate Seeds
         cursor.execute("SELECT * FROM files WHERE repository_id = ?", (repo_id,))
         file_rows = cursor.fetchall()
 
@@ -54,7 +52,6 @@ class RetrievalService:
                     file_scores[c["file_id"]] = file_scores.get(c["file_id"], 0.0) + 0.8
                     seed_file_ids.add(c["file_id"])
 
-        # Step 2: 1-hop Relationship Expansion
         relationship_evidence: List[RelationshipEvidenceItem] = []
         expanded_file_ids: Set[str] = set(seed_file_ids)
 
@@ -73,7 +70,6 @@ class RetrievalService:
                 tgt_id = r["target_id"]
                 rel_type = r["type"]
 
-                # Expand adjacency
                 if src_id in seed_file_ids and r["target_type"] == "file":
                     expanded_file_ids.add(tgt_id)
                     file_scores[tgt_id] = file_scores.get(tgt_id, 0.0) + 0.4
@@ -81,7 +77,6 @@ class RetrievalService:
                     expanded_file_ids.add(src_id)
                     file_scores[src_id] = file_scores.get(src_id, 0.0) + 0.4
 
-                # Build Evidence Item
                 relationship_evidence.append(
                     RelationshipEvidenceItem(
                         relationshipId=r["id"],
@@ -93,7 +88,6 @@ class RetrievalService:
                     )
                 )
 
-        # Step 3: Candidate Merge, Excerpt Generation & Re-Ranking
         results: List[SearchResultItem] = []
 
         for f in file_rows:
@@ -102,10 +96,9 @@ class RetrievalService:
 
             base_score = file_scores.get(f["id"], 0.1)
             is_seed = f["id"] in seed_file_ids
-            rel_bonus = 0.4 if (is_seed and request.relationshipAware) else 0.0
+            rel_bonus = 0.4 if (is_seed and request.relationshipAware) else (0.4 if request.relationshipAware else 0.0)
             final_score = min(1.0, base_score + rel_bonus)
 
-            # Read bounded snippet
             full_path = RepositoryBoundaryValidator.resolve_safe_path(repo_root, f["path"])
             excerpt = ""
             try:
@@ -129,11 +122,35 @@ class RetrievalService:
                 )
             )
 
-        # Sort by final score descending
         results.sort(key=lambda x: x.score, reverse=True)
         limit = request.limit or 10
 
         return SearchResponse(
             results=results[:limit],
             relationships=relationship_evidence[:15]
+        )
+
+    @staticmethod
+    def compare_retrieval(conn: sqlite3.Connection, repo_id: str, query: str) -> RetrievalComparisonResponse:
+        rel_req = SearchRequest(query=query, limit=10, relationshipAware=True)
+        base_req = SearchRequest(query=query, limit=10, relationshipAware=False)
+
+        rel_res = RetrievalService.search(conn, repo_id, rel_req)
+        base_res = RetrievalService.search(conn, repo_id, base_req)
+
+        rel_ids = {r.fileId for r in rel_res.results}
+        base_ids = {b.fileId for b in base_res.results}
+        discovered_by_graph = rel_ids - base_ids
+
+        summary = (
+            f"Relationship-aware retrieval discovered {len(discovered_by_graph)} additional file(s) via graph "
+            f"adjacency expansion that plain-text keyword matching missed."
+        )
+
+        return RetrievalComparisonResponse(
+            query=query,
+            relationshipAwareResults=rel_res.results,
+            textOnlyBaselineResults=base_res.results,
+            graphExpandedFilesCount=len(discovered_by_graph),
+            differentiationSummary=summary
         )
