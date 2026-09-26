@@ -1,0 +1,63 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv
+
+# SQLite Database & Storage
+*.db
+*.sqlite
+*.sqlite3
+data_store/
+storage/
+
+# Environment variables & secrets
+.env
+.env.local
+*.pem
+*.key
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+.docker/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Temp / Scratch files
+scratch/
+*.tmp
+doc1_scope.txt
+doc2_blueprint.txt

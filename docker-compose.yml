@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  repolytic-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: repolytic_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=info
+      - DATABASE_PATH=/app/data_store/repolytic.db
+    volumes:
+      - backend_data:/app/data_store
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  backend_data:
+    driver: local
