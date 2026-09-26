@@ -1,6 +1,7 @@
 import uuid
 import json
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from app.models.domain import RepositoryStatus
@@ -9,11 +10,14 @@ from app.analysis.discovery import RepositoryDiscovery
 from app.analysis.structure import StructureExtractor
 from app.analysis.relationships import RelationshipExtractor
 from app.security.repository_boundary import RepositoryBoundaryValidator
+from app.core.database import get_db_connection
+
+executor = ThreadPoolExecutor(max_workers=4)
 
 class AnalysisService:
 
     @staticmethod
-    def trigger_analysis(conn: sqlite3.Connection, repo_id: str, force: bool = False) -> Optional[AnalysisJobResponse]:
+    def trigger_analysis(conn: sqlite3.Connection, repo_id: str, force: bool = False, run_async: bool = False) -> Optional[AnalysisJobResponse]:
         cursor = conn.cursor()
 
         cursor.execute("SELECT * FROM repositories WHERE id = ?", (repo_id,))
@@ -29,6 +33,7 @@ class AnalysisService:
 
         job_id = f"job_{uuid.uuid4().hex[:12]}"
         now = datetime.now(timezone.utc).isoformat()
+        source_path = repo["source_path"]
 
         cursor.execute(
             """
@@ -42,9 +47,20 @@ class AnalysisService:
         cursor.execute("UPDATE repositories SET status = ? WHERE id = ?", (RepositoryStatus.ANALYZING.value, repo_id))
         conn.commit()
 
-        AnalysisService.run_analysis_pipeline(conn, repo_id, job_id, repo["source_path"])
+        if run_async:
+            executor.submit(AnalysisService._async_worker, repo_id, job_id, source_path)
+        else:
+            AnalysisService.run_analysis_pipeline(conn, repo_id, job_id, source_path)
 
         return AnalysisService.get_job_status(conn, job_id)
+
+    @staticmethod
+    def _async_worker(repo_id: str, job_id: str, root_path: str):
+        conn = get_db_connection()
+        try:
+            AnalysisService.run_analysis_pipeline(conn, repo_id, job_id, root_path)
+        finally:
+            conn.close()
 
     @staticmethod
     def get_job_status(conn: sqlite3.Connection, job_id: str) -> Optional[AnalysisJobResponse]:
