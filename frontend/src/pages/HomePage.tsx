@@ -95,7 +95,7 @@ export function HomePage() {
             <h3>Workspaces</h3>
             {loading ? <p className="meta">Loading repositories…</p> : null}
             <div className="repo-list">
-              {repos.map((repo) => (
+              {repos.slice(0, 5).map((repo) => (
                 <Link className="repo-row" key={repo.id} to={`/workspace/${repo.id}`}>
                   <div>
                     <strong>{repo.name}</strong>
@@ -104,6 +104,11 @@ export function HomePage() {
                   <span className={`badge ${repo.status}`}>{repo.status}</span>
                 </Link>
               ))}
+              {!loading && repos.length > 5 ? (
+                <p className="meta" style={{ marginTop: 8 }}>
+                  Showing 5 most recent of {repos.length} workspaces
+                </p>
+              ) : null}
               {!loading && repos.length === 0 ? <p className="meta">No repositories yet.</p> : null}
             </div>
           </div>
