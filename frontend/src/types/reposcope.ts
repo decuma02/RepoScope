@@ -162,3 +162,49 @@ export interface GraphData {
   nodes: GraphNode[];
   edges: GraphEdge[];
 }
+
+export interface FileDetail {
+  id: string;
+  repositoryId: string;
+  path: string;
+  language?: string;
+  extension?: string;
+  sizeBytes: number;
+  status: string;
+  components: Component[];
+  excerpt?: string;
+  startLine?: number;
+  endLine?: number;
+}
+
+export interface TreeResponse {
+  repositoryId: string;
+  tree: TreeNode[];
+}
+
+export interface SearchResponse {
+  results: SearchResultItem[];
+  relationships: Array<{
+    relationshipId: string;
+    sourcePath: string;
+    targetPath: string;
+    type: RelationshipType;
+    confidence: number;
+    sourceLine?: number;
+  }>;
+}
+
+export interface ApiErrorBody {
+  error: {
+    code: string;
+    message: string;
+    details?: Record<string, unknown>;
+    retryable: boolean;
+    requestId: string;
+  };
+}
+
+export interface HighlightRange {
+  startLine: number;
+  endLine: number;
+}
