@@ -9,5 +9,9 @@ description = "Repository Intelligence & Context Engine"
 readme = "README.md"
 requires-python = ">=3.11"
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["backend*"]
+
 [tool.vercel]
 entrypoint = "backend.app.main:app"
