@@ -71,22 +71,24 @@ function WorkspaceInner() {
         </aside>
         <section className="panel">
           <div className="tabs">
-            {(["overview", "code", "chat", "search"] as WorkspaceTab[]).map((item) => (
+            {(["graph", "code", "chat", "search"] as WorkspaceTab[]).map((item) => (
               <button key={item} className={`tab ${tab === item ? "active" : ""}`} onClick={() => setTab(item)}>
-                {item}
+                {item === "graph" ? "focused graph" : item}
               </button>
             ))}
           </div>
-          <div className="center-body">
-            {repo && tab === "overview" ? <RepoOverview repo={repo} job={job} onRefresh={() => void refresh()} /> : null}
+          <div className="center-body" style={{ padding: tab === "graph" ? 0 : 16 }}>
+            {tab === "graph" ? <GraphVisualizer repositoryId={repoId} /> : null}
             {tab === "code" ? <SourceViewer repositoryId={repoId} /> : null}
             {tab === "chat" ? <ChatPanel repositoryId={repoId} /> : null}
             {tab === "search" ? <SearchPanel repositoryId={repoId} /> : null}
           </div>
         </section>
-        <aside className="panel">
-          <div className="panel-header">Focused graph</div>
-          <GraphVisualizer repositoryId={repoId} />
+        <aside className="panel sidebar-overview">
+          <div className="panel-header">Discoveries & Stats</div>
+          <div style={{ padding: 14 }}>
+            {repo ? <RepoOverview repo={repo} job={job} onRefresh={() => void refresh()} /> : null}
+          </div>
         </aside>
       </div>
     </div>

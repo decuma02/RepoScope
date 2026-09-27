@@ -131,9 +131,22 @@ export function GraphVisualizer({ repositoryId }: { repositoryId: string }) {
 
   const renderContent = (isModal = false) => (
     <div className={`graph-visualizer-container ${isModal ? "is-modal" : ""}`}>
-      {/* --- Top Control Bar (Browser Back/Forward + Zoom + Fullscreen) --- */}
+      {/* --- Top Control Bar (Browser Back/Forward + Initial View + Zoom + Fullscreen) --- */}
       <div className="graph-toolbar">
         <div className="toolbar-group history-controls">
+          <button
+            type="button"
+            className="tool-btn"
+            title="Reset to initial top connected graph"
+            onClick={() => {
+              setGraphNodeId(undefined);
+              setHistory([]);
+              setHistoryIndex(-1);
+              resetView();
+            }}
+          >
+            🏠 Initial View
+          </button>
           <button
             type="button"
             className="tool-btn"

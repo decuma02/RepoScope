@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import type { HighlightRange } from "../types/reposcope";
 
-export type WorkspaceTab = "overview" | "code" | "chat" | "search";
+export type WorkspaceTab = "graph" | "code" | "chat" | "search";
 
 interface WorkspaceState {
   tab: WorkspaceTab;
@@ -20,7 +20,7 @@ interface WorkspaceState {
 const WorkspaceContext = createContext<WorkspaceState | null>(null);
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const [tab, setTab] = useState<WorkspaceTab>("overview");
+  const [tab, setTab] = useState<WorkspaceTab>("graph");
   const [selectedFileId, setSelectedFileId] = useState<string>();
   const [highlight, setHighlight] = useState<HighlightRange>();
   const [graphNodeId, setGraphNodeId] = useState<string>();
