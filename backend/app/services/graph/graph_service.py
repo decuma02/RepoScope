@@ -30,7 +30,19 @@ class GraphService:
                 target_file_id = clean_id
 
         if not target_file_id:
-            target_file_id = list(files.keys())[0]
+            cursor.execute(
+                """
+                SELECT source_id, COUNT(*) as cnt FROM relationships
+                WHERE repository_id = ? AND source_type = 'file'
+                GROUP BY source_id ORDER BY cnt DESC LIMIT 1
+                """,
+                (repo_id,)
+            )
+            most_connected = cursor.fetchone()
+            if most_connected and most_connected["source_id"] in files:
+                target_file_id = most_connected["source_id"]
+            else:
+                target_file_id = list(files.keys())[0]
 
         cursor.execute(
             """
@@ -40,6 +52,17 @@ class GraphService:
             (repo_id, target_file_id, target_file_id)
         )
         rel_rows = cursor.fetchall()
+
+        if not rel_rows:
+            cursor.execute(
+                """
+                SELECT * FROM relationships
+                WHERE repository_id = ?
+                LIMIT 12
+                """,
+                (repo_id,)
+            )
+            rel_rows = cursor.fetchall()
 
         nodes_map = {}
         edges = []
