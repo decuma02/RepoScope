@@ -227,9 +227,18 @@ export function GraphVisualizer({ repositoryId }: { repositoryId: string }) {
             <feGaussianBlur stdDeviation="3" result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
+          <radialGradient id="centerNodeGradient" cx="50%" cy="50%" r="50%" fx="30%" fy="30%">
+            <stop offset="0%" stopColor="#33b1ff" />
+            <stop offset="60%" stopColor="#0f62fe" />
+            <stop offset="100%" stopColor="#032b85" />
+          </radialGradient>
+          <radialGradient id="selectedNodeGradient" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#00ffff" />
+            <stop offset="100%" stopColor="#0f62fe" />
+          </radialGradient>
         </defs>
 
-        <g transform={`translate(${pan.x}, ${pan.y}) scale(${scale})`} transform-origin={`${dimensions.cx} ${dimensions.cy}`}>
+        <g className="graph-zoom-group" transform={`translate(${pan.x}, ${pan.y}) scale(${scale})`} transformOrigin={`${dimensions.cx}px ${dimensions.cy}px`}>
           {/* Edges */}
           {graph.edges.map((edge) => {
             const source = layout.get(edge.source);
@@ -260,7 +269,8 @@ export function GraphVisualizer({ repositoryId }: { repositoryId: string }) {
 
             // Label positioning to prevent overlap
             const isTop = pos.y < dimensions.cy;
-            const labelY = isCenter ? 32 : isTop ? -20 : 28;
+            const labelY = isCenter ? 40 : isTop ? -22 : 30;
+            const radius = isCenter ? 24 : selected ? 16 : 12;
 
             return (
               <g
@@ -274,10 +284,32 @@ export function GraphVisualizer({ repositoryId }: { repositoryId: string }) {
                   setTab("code");
                 }}
               >
-                {/* Glow ring behind selected node */}
-                {selected ? (
+                {/* Outer pulsing animation rings for center node */}
+                {isCenter ? (
+                  <>
+                    <circle
+                      r={36}
+                      fill="none"
+                      stroke="#33b1ff"
+                      strokeWidth="1.5"
+                      opacity="0.35"
+                      className="center-pulse-ring-outer"
+                    />
+                    <circle
+                      r={30}
+                      fill="none"
+                      stroke="#0f62fe"
+                      strokeWidth="2"
+                      opacity="0.6"
+                      className="center-pulse-ring-inner"
+                    />
+                  </>
+                ) : null}
+
+                {/* Glow ring behind non-center selected node */}
+                {selected && !isCenter ? (
                   <circle
-                    r={isCenter ? 22 : 18}
+                    r={20}
                     fill="none"
                     stroke="#00ffff"
                     strokeWidth={3}
@@ -288,34 +320,41 @@ export function GraphVisualizer({ repositoryId }: { repositoryId: string }) {
 
                 {/* Node Circle */}
                 <circle
-                  r={isCenter ? 18 : selected ? 15 : 12}
-                  fill={isCenter ? "#4589ff" : node.type === "file" ? "#0f62fe" : "#33b1ff"}
-                  stroke={selected ? "#ffffff" : "rgba(255,255,255,0.2)"}
-                  strokeWidth={selected ? 2.5 : 1.5}
+                  r={radius}
+                  fill={isCenter ? "url(#centerNodeGradient)" : selected ? "url(#selectedNodeGradient)" : node.type === "file" ? "#0f62fe" : "#33b1ff"}
+                  stroke={isCenter ? "#00ffff" : selected ? "#ffffff" : "rgba(255,255,255,0.25)"}
+                  strokeWidth={isCenter ? 3 : selected ? 2.5 : 1.5}
+                  filter={isCenter ? "url(#glow)" : undefined}
                 />
+
+                {/* Center node emblem inner core */}
+                {isCenter ? (
+                  <circle r={6} fill="#ffffff" opacity={0.9} />
+                ) : null}
 
                 {/* Node Label background pill for crystal clear readability */}
                 <rect
-                  x={-Math.min(120, node.label.length * 4.2 + 8) / 2}
-                  y={labelY - 12}
-                  width={Math.min(120, node.label.length * 4.2 + 8)}
-                  height={17}
-                  rx={4}
-                  fill={selected ? "rgba(15, 98, 254, 0.92)" : "rgba(11, 15, 22, 0.88)"}
-                  stroke={selected ? "#00ffff" : "rgba(255,255,255,0.15)"}
-                  strokeWidth={1}
+                  x={-Math.min(140, node.label.length * (isCenter ? 5.5 : 4.5) + 12) / 2}
+                  y={labelY - (isCenter ? 14 : 12)}
+                  width={Math.min(140, node.label.length * (isCenter ? 5.5 : 4.5) + 12)}
+                  height={isCenter ? 22 : 18}
+                  rx={isCenter ? 6 : 4}
+                  fill={isCenter ? "rgba(15, 98, 254, 0.95)" : selected ? "rgba(20, 30, 48, 0.95)" : "rgba(11, 15, 22, 0.88)"}
+                  stroke={isCenter ? "#00ffff" : selected ? "#33b1ff" : "rgba(255,255,255,0.15)"}
+                  strokeWidth={isCenter ? 1.5 : 1}
                 />
 
                 {/* Label Text */}
                 <text
                   y={labelY}
                   textAnchor="middle"
-                  fill={selected ? "#ffffff" : "#e0e6ed"}
-                  fontSize={selected ? "11.5" : "10.5"}
-                  fontWeight={selected || isCenter ? "bold" : "normal"}
+                  fill={isCenter || selected ? "#ffffff" : "#e0e6ed"}
+                  fontSize={isCenter ? "13" : selected ? "11.5" : "10.5"}
+                  fontWeight={isCenter ? "800" : selected ? "bold" : "normal"}
+                  letterSpacing={isCenter ? "0.02em" : undefined}
                 >
                   <title>{node.path || node.label}</title>
-                  {truncateLabel(node.label, isModal ? 24 : 16)}
+                  {isCenter ? node.label : truncateLabel(node.label, isModal ? 24 : 16)}
                 </text>
               </g>
             );

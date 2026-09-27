@@ -65,11 +65,14 @@ function WorkspaceInner() {
       <TopBar repo={repo ?? undefined} />
       {error ? <p className="error" style={{ padding: 16 }}>{error}</p> : null}
       <div className="workspace">
-        <aside className="panel">
+        {/* Left — file explorer, own vertical scroll */}
+        <aside className="panel panel-left">
           <div className="panel-header">Explorer</div>
           <FileTree tree={tree} />
         </aside>
-        <section className="panel">
+
+        {/* Center — tabs + graph/code/chat/search */}
+        <section className="panel panel-center">
           <div className="tabs">
             {(["graph", "code", "chat", "search"] as WorkspaceTab[]).map((item) => (
               <button key={item} className={`tab ${tab === item ? "active" : ""}`} onClick={() => setTab(item)}>
@@ -77,16 +80,23 @@ function WorkspaceInner() {
               </button>
             ))}
           </div>
-          <div className="center-body" style={{ padding: tab === "graph" ? 0 : 16 }}>
-            {tab === "graph" ? <GraphVisualizer repositoryId={repoId} /> : null}
-            {tab === "code" ? <SourceViewer repositoryId={repoId} /> : null}
-            {tab === "chat" ? <ChatPanel repositoryId={repoId} /> : null}
-            {tab === "search" ? <SearchPanel repositoryId={repoId} /> : null}
-          </div>
+          {tab === "graph" ? (
+            <GraphVisualizer repositoryId={repoId} />
+          ) : (
+            <div className="center-scroll-body">
+              <div className="center-body">
+                {tab === "code" ? <SourceViewer repositoryId={repoId} /> : null}
+                {tab === "chat" ? <ChatPanel repositoryId={repoId} /> : null}
+                {tab === "search" ? <SearchPanel repositoryId={repoId} /> : null}
+              </div>
+            </div>
+          )}
         </section>
-        <aside className="panel sidebar-overview">
-          <div className="panel-header">Discoveries & Stats</div>
-          <div style={{ padding: 14 }}>
+
+        {/* Right — repo overview, own vertical scroll, no horizontal */}
+        <aside className="panel panel-right">
+          <div className="panel-header">Discoveries &amp; Stats</div>
+          <div className="panel-right-body">
             {repo ? <RepoOverview repo={repo} job={job} onRefresh={() => void refresh()} /> : null}
           </div>
         </aside>

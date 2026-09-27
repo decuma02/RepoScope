@@ -26,7 +26,8 @@ html,
 body,
 #root {
   margin: 0;
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
 }
@@ -42,7 +43,8 @@ a {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -141,6 +143,9 @@ input[type="checkbox"] {
 }
 
 .home {
+  flex: 1;
+  width: 100%;
+  overflow-y: auto;
   max-width: 1080px;
   margin: 0 auto;
   padding: 48px 24px 80px;
@@ -225,18 +230,55 @@ textarea {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr) 340px;
   min-height: 0;
+  /* Each column must not grow beyond its allocated width */
+  overflow: hidden;
 }
 
+/* All panels: fixed height, own scroll axis */
 .panel {
   border-right: 1px solid var(--border);
   background: var(--bg-panel);
-  min-height: calc(100vh - 57px);
-  overflow: auto;
+  height: calc(100vh - 57px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .panel:last-child {
   border-right: 0;
   border-left: 1px solid var(--border);
+}
+
+/* Left panel (Explorer) — vertical scroll only */
+.panel.panel-left {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Right panel (Overview) — vertical scroll, never horizontal */
+.panel.panel-right {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Right-panel inner padding container */
+.panel-right-body {
+  padding: 14px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+/* Center panel — flex column, graph fills remaining height */
+.panel.panel-center {
+  overflow: hidden;
+}
+
+/* Scrollable inner body for non-graph tabs */
+.center-scroll-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
 }
 
 .panel-header {
@@ -256,8 +298,17 @@ textarea {
   color: var(--muted);
 }
 
+/* File tree — prevent rows from blowing out the panel width */
+.tree-scroll {
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-width: 0;
+}
+
 .tree-node {
   user-select: none;
+  min-width: 0;
 }
 
 .tree-row {
@@ -265,26 +316,68 @@ textarea {
   align-items: center;
   gap: 6px;
   width: 100%;
-  padding: 5px 10px;
+  min-width: 0;
+  padding: 6px 8px;
   border: 0;
+  border-left: 2px solid transparent;
   background: transparent;
   color: var(--text);
   text-align: left;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12.5px;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.tree-row:hover,
-.tree-row.active {
+.tree-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.tree-caret-placeholder {
+  width: 12px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.tree-icon {
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.tree-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+  font-size: 12px;
+}
+
+.tree-row:hover {
   background: var(--bg-hover);
 }
 
 .tree-row.active {
+  background: rgba(51, 177, 255, 0.12);
   color: var(--cyan);
+  border-left-color: var(--cyan);
+}
+
+.tree-dir {
+  font-weight: 600;
 }
 
 .tree-children {
-  padding-left: 14px;
+  display: flex;
+  flex-direction: column;
 }
 
 .tabs {
@@ -309,14 +402,18 @@ textarea {
   color: var(--text);
 }
 
+/* Legacy .center-body still used by non-graph tabs */
 .center-body {
   padding: 16px;
+  overflow-x: hidden;
+  min-width: 0;
 }
 
+/* Right-panel stats grid: 2-column so it fits in 340px without overflow */
 .stats {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
 }
 
 .stat {
@@ -458,10 +555,51 @@ textarea {
 
 .graph-canvas {
   width: 100%;
-  height: calc(100vh - 140px);
+  flex: 1;
+  min-height: 0;
   background:
     radial-gradient(circle at 30% 20%, rgba(15, 98, 254, 0.12), transparent 28%),
+    radial-gradient(circle at 75% 80%, rgba(51, 177, 255, 0.06), transparent 32%),
     #0b0f16;
+  cursor: grab;
+}
+
+/* Smooth zoom: animate the transform on the inner <g> group */
+.graph-zoom-group {
+  transition: transform 0.18s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: transform;
+}
+
+/* Disable transition while actively dragging so pan stays instant */
+.graph-canvas.dragging .graph-zoom-group {
+  transition: none;
+}
+
+@keyframes centerPulse {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.3;
+  }
+}
+
+.center-pulse-ring-outer {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: centerPulse 3s ease-in-out infinite;
+}
+
+.center-pulse-ring-inner {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: centerPulse 3s ease-in-out infinite 0.75s;
 }
 
 .legend {
