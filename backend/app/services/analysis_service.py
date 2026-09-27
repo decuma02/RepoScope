@@ -94,6 +94,19 @@ class AnalysisService:
         cursor = conn.cursor()
 
         try:
+            # Purge any data left from a previous analysis run before re-inserting.
+            # This makes re-analysis a clean rebuild rather than an additive append,
+            # preventing duplicate rows (files/components/chunks) and PRIMARY KEY
+            # conflicts (relationships whose IDs are deterministic and therefore
+            # identical across runs).
+            # NOTE: analysis_jobs rows are NOT deleted here — the current job row
+            # was just committed by trigger_analysis() and must be preserved.
+            cursor.execute("DELETE FROM relationships  WHERE repository_id = ?", (repo_id,))
+            cursor.execute("DELETE FROM content_chunks WHERE repository_id = ?", (repo_id,))
+            cursor.execute("DELETE FROM components     WHERE repository_id = ?", (repo_id,))
+            cursor.execute("DELETE FROM files          WHERE repository_id = ?", (repo_id,))
+            conn.commit()
+
             # Stage 1: Discovery
             files, warnings = RepositoryDiscovery.discover_files(root_path)
 
