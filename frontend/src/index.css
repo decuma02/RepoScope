@@ -26,10 +26,25 @@ html,
 body,
 #root {
   margin: 0;
-  height: 100%;
-  overflow: hidden;
+  min-height: 100vh;
   background: var(--bg);
   color: var(--text);
+}
+
+/* Custom sleek dark scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0b0d12;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a3344;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4589ff;
 }
 
 button,
@@ -43,11 +58,11 @@ a {
 }
 
 .app-shell {
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
+
 
 .topbar {
   display: flex;
@@ -145,11 +160,11 @@ input[type="checkbox"] {
 .home {
   flex: 1;
   width: 100%;
-  overflow-y: auto;
   max-width: 1080px;
   margin: 0 auto;
-  padding: 48px 24px 80px;
+  padding: 36px 24px 60px;
 }
+
 
 .hero h2 {
   margin: 0 0 8px;

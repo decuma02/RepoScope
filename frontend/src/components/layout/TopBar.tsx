@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import type { Repository } from "../../types/reposcope";
 import { isMockMode } from "../../api";
+import { formatSourcePath } from "../../utils/path";
 
 export function TopBar({ repo }: { repo?: Repository }) {
   const mock = isMockMode();
@@ -26,7 +27,7 @@ export function TopBar({ repo }: { repo?: Repository }) {
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div>
               <strong>{repo.name}</strong>
-              <div className="meta">{repo.sourcePath}</div>
+              <div className="meta">{formatSourcePath(repo.sourcePath, repo.sourceType)}</div>
             </div>
             <span className={`badge ${repo.status}`}>{repo.status}</span>
           </div>

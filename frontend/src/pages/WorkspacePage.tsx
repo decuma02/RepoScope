@@ -89,7 +89,7 @@ function WorkspaceInner() {
   if (!repoId) return null;
 
   return (
-    <div className="app-shell">
+    <div className="app-shell has-workspace">
       <TopBar repo={repo ?? undefined} />
       {error ? <p className="error" style={{ padding: 16 }}>{error}</p> : null}
       <div className="workspace">

@@ -1,30 +1,29 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { getClient, isMockMode } from "../api";
 import { ApiError } from "../api/client";
 import { TopBar } from "../components/layout/TopBar";
 import type { Repository } from "../types/reposcope";
+import { formatSourcePath } from "../utils/path";
 
 /**
  * HomePage — Landing page and repository registration hub.
  *
  * Responsibilities:
  *   - Displays the hero banner and RepoScope branding.
- *   - Provides a form to register a new repository (local path or GitHub URL).
- *   - Supports toggling between "local_path" and "github" source types;
- *     switching auto-fills a sensible default repository name.
+ *   - Provides a form to register a new public GitHub repository.
  *   - On submit: calls ``createRepository`` → triggers ``analyze`` →
  *     navigates to ``/workspace/:id``.
- *   - Lists the 5 most-recently registered workspaces from the API
- *     (auto-refreshes on mock mode toggle).
- *   - Renders in mock mode when ``?mock=1`` is in the URL, showing fixture data
- *     without a running backend.
+ *   - Lists the 5 most-recently registered workspaces from the API.
  */
 export function HomePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const mock = isMockMode();
+  const showLocalOption = location.search.includes("local=1") || import.meta.env.DEV;
+
   const [repos, setRepos] = useState<Repository[]>([]);
-  const [sourceType, setSourceType] = useState<"local_path" | "github">("local_path");
+  const [sourceType, setSourceType] = useState<"local_path" | "github">("github");
   const [name, setName] = useState("My Repository");
   const [sourcePath, setSourcePath] = useState("");
   const [githubUrl, setGithubUrl] = useState("");
@@ -41,7 +40,7 @@ export function HomePage() {
         setError(
           err instanceof ApiError
             ? err.message
-            : "Backend is not reachable. Start FastAPI on :8000, or open /?mock=1.",
+            : "Backend is not reachable. Ensure FastAPI backend is running.",
         );
       })
       .finally(() => setLoading(false));
@@ -52,7 +51,6 @@ export function HomePage() {
    *
    * Builds the correct request payload for the selected source type, posts it
    * to the backend, fires analysis immediately, then navigates to the workspace.
-   * Displays an inline error banner if any step fails.
    */
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -86,38 +84,39 @@ export function HomePage() {
           <img src="/logo-full.png" alt="RepoScope Logo" className="hero-logo-img" />
           <h2>See the repository, then ask it grounded questions.</h2>
           <p>
-            Register a local directory path or clone a public GitHub repository, run one-shot analysis, explore files, inspect the focused relationship graph, and chat with answers that cite real source ranges.
+            Clone a public GitHub repository, run one-shot analysis, explore files, inspect the focused relationship graph, and chat with answers that cite real source ranges.
           </p>
         </section>
         <div className="home-grid">
           <div className="card">
             <h3>Register a repository</h3>
             
-            {/* Source Type Toggle */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-              <button
-                type="button"
-                className={`btn ${sourceType === "local_path" ? "" : "secondary"}`}
-                style={{ flex: 1, fontSize: 12 }}
-                onClick={() => {
-                  setSourceType("local_path");
-                  if (name === "GitHub Repository") setName("Local Repository");
-                }}
-              >
-                💻 Local Directory
-              </button>
-              <button
-                type="button"
-                className={`btn ${sourceType === "github" ? "" : "secondary"}`}
-                style={{ flex: 1, fontSize: 12 }}
-                onClick={() => {
-                  setSourceType("github");
-                  if (name === "Local Repository") setName("GitHub Repository");
-                }}
-              >
-                🐙 GitHub Repository
-              </button>
-            </div>
+            {showLocalOption ? (
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                <button
+                  type="button"
+                  className={`btn ${sourceType === "github" ? "" : "secondary"}`}
+                  style={{ flex: 1, fontSize: 12 }}
+                  onClick={() => {
+                    setSourceType("github");
+                    if (name === "Local Repository") setName("GitHub Repository");
+                  }}
+                >
+                  🐙 GitHub Repository
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${sourceType === "local_path" ? "" : "secondary"}`}
+                  style={{ flex: 1, fontSize: 12 }}
+                  onClick={() => {
+                    setSourceType("local_path");
+                    if (name === "GitHub Repository") setName("Local Repository");
+                  }}
+                >
+                  💻 Local Directory
+                </button>
+              </div>
+            ) : null}
 
             <form onSubmit={onSubmit}>
               <div className="field">
@@ -146,13 +145,13 @@ export function HomePage() {
                       const val = event.target.value;
                       setGithubUrl(val);
                       // Auto infer name from URL if name is generic
-                      if (val && (name === "GitHub Repository" || name === "Local Repository" || !name)) {
+                      if (val && (name === "GitHub Repository" || name === "Local Repository" || name === "My Repository" || !name)) {
                         const parts = val.replace(/\/$/, "").split("/");
                         const repoName = parts[parts.length - 1]?.replace(/\.git$/, "");
                         if (repoName) setName(repoName);
                       }
                     }}
-                    placeholder="https://github.com/fastapi/fastapi"
+                    placeholder="https://github.com/decuma02/RepoScope"
                     required
                   />
                 </div>
@@ -163,13 +162,6 @@ export function HomePage() {
               <button className="btn" disabled={busy} type="submit" style={{ width: "100%", marginTop: 8 }}>
                 {busy ? (sourceType === "github" ? "Cloning & Analyzing…" : "Registering…") : "Register & Analyze"}
               </button>
-
-              {!mock ? (
-                <p className="meta" style={{ marginTop: 12 }}>
-                  Need a walkthrough without the API?{" "}
-                  <Link to="/?mock=1">Open fixture mode</Link>
-                </p>
-              ) : null}
             </form>
           </div>
 
@@ -181,7 +173,7 @@ export function HomePage() {
                 <Link className="repo-row" key={repo.id} to={`/workspace/${repo.id}`}>
                   <div>
                     <strong>{repo.name}</strong>
-                    <div className="meta">{repo.sourcePath}</div>
+                    <div className="meta">{formatSourcePath(repo.sourcePath, repo.sourceType)}</div>
                   </div>
                   <span className={`badge ${repo.status}`}>{repo.status}</span>
                 </Link>
@@ -199,3 +191,4 @@ export function HomePage() {
     </div>
   );
 }
+
