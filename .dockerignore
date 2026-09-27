@@ -10,11 +10,29 @@ venv/
 *.db
 *.sqlite
 *.sqlite3
-storage/
+
+# Don't ignore tests (needed for CI), but ignore data stores
 data_store/
-tests/
+bob_sessions/
+bob_tasks/
+demo/
+
+# IDE files
 .vscode/
 .idea/
+
+# Docs / assets (not needed in image)
 README.md
 ARCHITECTURE.md
+OWNERSHIP.md
 *.docx
+
+# Frontend node_modules and existing local dist
+# (the Dockerfile stage rebuilds from source)
+frontend/node_modules/
+frontend/dist/
+
+# Pytest cache & coverage
+.pytest_cache/
+.coverage
+htmlcov/
