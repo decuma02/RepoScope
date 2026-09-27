@@ -329,8 +329,13 @@ def _extract_js_ts(file_id: str, repo_id: str, lines: List[str]) -> List[Dict[st
     # Pass 3: class methods (indented non-function methods not caught above)
     for m in _JS_METHOD.finditer(content):
         name = m.group("name")
-        # Skip constructor and common non-method keywords
-        if name in ("if", "for", "while", "switch", "constructor"):
+        # Skip constructor and JS control-flow keywords that happen to match the
+        # method pattern (e.g. `catch(err) {`, `finally {` on its own line).
+        if name in (
+            "if", "for", "while", "switch", "constructor",
+            "catch", "finally", "do", "else",
+            "new", "return", "delete", "typeof", "instanceof", "void",
+        ):
             continue
         start_line = _line_of(content, m.start())
 
@@ -360,13 +365,23 @@ def _extract_js_ts(file_id: str, repo_id: str, lines: List[str]) -> List[Dict[st
 
 def _find_block_end(lines: List[str], start_idx: int, total: int) -> int:
     """
-    Scan forward from *start_idx* counting braces to find the closing `}`.
+    Scan forward from *start_idx* counting braces to find the closing ``}``.
     Returns 1-based line number of the closing brace, or a conservative estimate.
+
+    The depth check fires only after we have entered a block (seen at least one
+    ``{``).  Without this guard, brace-free single-line expressions such as
+    ``const fn = (x) => x * 2`` would get an end_line that bleeds into the
+    following line because depth stays 0 from the start.
     """
     depth = 0
+    entered_block = False
     for i in range(start_idx, total):
-        depth += lines[i].count("{") - lines[i].count("}")
-        if depth <= 0 and i > start_idx:
+        opens = lines[i].count("{")
+        closes = lines[i].count("}")
+        depth += opens - closes
+        if opens:
+            entered_block = True
+        if entered_block and depth <= 0:
             return i + 1
     return min(start_idx + 50, total)
 
