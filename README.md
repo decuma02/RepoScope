@@ -17,7 +17,7 @@ See [OWNERSHIP.md](file:///d:/git/akhil_repo_list/work/RepoScope/OWNERSHIP.md) f
 ```
 repo/
 ├── backend/            # FastAPI Backend Modular Monolith & Unit/Integration Tests
-├── frontend/           # React + TypeScript + Vite UI Application (Placeholder Scaffolding)
+├── frontend/           # React + TypeScript + Vite workspace (explorer, chat, graph)
 ├── data/               # Local Repository Storage & Demo Fixtures
 ├── ai/                 # Prompts, Prompt Lab & Test Cases
 ├── bob_sessions/       # IBM Bob Session Logs & Screenshots Evidence
@@ -46,7 +46,16 @@ python -m uvicorn backend.app.main:app --reload --port 8000
 python -m pytest backend/tests -v
 ```
 
-### 4. Quickstart with Docker
+### 4. Frontend (Vite + React)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+The UI runs at http://localhost:5173 and proxies `/api` to the backend on port 8000.
+Open http://localhost:5173/?mock=1 to tour the workspace with bundled fixtures when the API is down.
+
+### 5. Quickstart with Docker
 ```bash
 docker build -t reposcope-backend .
 docker run -p 8000:8000 reposcope-backend

@@ -44,3 +44,7 @@ data/index/*
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
