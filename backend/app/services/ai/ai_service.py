@@ -223,11 +223,21 @@ class AIService:
                             error_detail = res_json["errors"][0].get("message", "")
                     except Exception:
                         pass
-                    if not error_detail and exc.response.text:
+                    if not error_detail and getattr(exc.response, "text", None):
                         error_detail = exc.response.text
                 if not error_detail:
                     error_detail = str(exc)
-                answer_text = f"An error occurred while contacting the AI service: {error_detail}"
+
+                if "Failed to find the IBMid" in error_detail or "user_authorization_failed" in error_detail or "Access denied" in error_detail:
+                    user_friendly_note = (
+                        f"An error occurred while contacting the AI service: Watsonx Access Authorization Failed. "
+                        f"The API key does not have access to WATSONX_PROJECT_ID '{settings.WATSONX_PROJECT_ID}' in IBM Cloud. "
+                        f"Raw API detail: {error_detail}"
+                    )
+                else:
+                    user_friendly_note = f"An error occurred while contacting the AI service: {error_detail}"
+
+                answer_text = user_friendly_note
                 confidence = "error"
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Watsonx call failed")

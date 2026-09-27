@@ -23,11 +23,19 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
-    # Watsonx / IBM Granite Credentials Placeholder
+    # Watsonx / IBM Granite Credentials
     WATSONX_APIKEY: str = ""
     WATSONX_PROJECT_ID: str = ""
     WATSONX_URL: str = "https://us-south.ml.cloud.ibm.com"
     WATSONX_MODEL_ID: str = "ibm/granite-13b-chat-v2"
+
+    # Optional Fallback LLM Providers
+    OPENAI_API_KEY: str = ""
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.1-70b-versatile"
+    OLLAMA_URL: str = ""
+    OLLAMA_MODEL: str = "llama3"
 
     # Database — Railway: set REPOSCOPE_DB_PATH=/data/reposcope.db and mount a persistent volume to /data.
     DATABASE_PATH: str = os.getenv("REPOSCOPE_DB_PATH", "/data/reposcope.db")
