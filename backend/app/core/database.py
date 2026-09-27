@@ -17,11 +17,18 @@ def _migrate_components_table(conn: sqlite3.Connection) -> None:
 def ensure_data_directory():
     db_dir = os.path.dirname(settings.DATABASE_PATH)
     if db_dir and not os.path.exists(db_dir):
-        os.makedirs(db_dir, exist_ok=True)
+        try:
+            os.makedirs(db_dir, exist_ok=True)
+        except Exception:
+            pass
 
 def get_db_connection() -> sqlite3.Connection:
     ensure_data_directory()
-    conn = sqlite3.connect(settings.DATABASE_PATH, check_same_thread=False)
+    try:
+        conn = sqlite3.connect(settings.DATABASE_PATH, check_same_thread=False)
+    except sqlite3.OperationalError:
+        fallback_path = os.path.join(os.getcwd(), "reposcope.db")
+        conn = sqlite3.connect(fallback_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -34,7 +41,11 @@ def get_db() -> Generator[sqlite3.Connection, None, None]:
 
 def init_db():
     ensure_data_directory()
-    conn = sqlite3.connect(settings.DATABASE_PATH)
+    try:
+        conn = sqlite3.connect(settings.DATABASE_PATH)
+    except sqlite3.OperationalError:
+        fallback_path = os.path.join(os.getcwd(), "reposcope.db")
+        conn = sqlite3.connect(fallback_path)
     cursor = conn.cursor()
 
     # Repositories Table
