@@ -42,7 +42,16 @@ async function parseError(response: Response): Promise<ApiError> {
   }
 }
 
-const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+function getApiBase(): string {
+  const raw = (import.meta.env.VITE_API_URL ?? "").trim().replace(/\/$/, "");
+  if (!raw) return "";
+  if (!/^https?:\/\//i.test(raw)) {
+    return `https://${raw}`;
+  }
+  return raw;
+}
+
+const API_BASE = getApiBase();
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
