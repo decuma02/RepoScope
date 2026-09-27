@@ -7,7 +7,7 @@ from typing import Optional, Dict, Any, List
 from backend.app.models.domain import RepositoryStatus
 from backend.app.schemas.api import AnalysisJobResponse
 from backend.app.services.ingestion.discovery import RepositoryDiscovery
-from backend.app.services.structure.extractor import StructureExtractor
+from backend.app.services.structure.extractor import StructureExtractor, extract_directory_records
 from backend.app.services.relationships.extractor import RelationshipExtractor
 from backend.app.storage.boundary import RepositoryBoundaryValidator
 from backend.app.core.database import get_db_connection
@@ -155,10 +155,16 @@ class AnalysisService:
                 for c in comps:
                     cursor.execute(
                         """
-                        INSERT INTO components (id, file_id, repository_id, name, type, start_line, end_line, signature, summary)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO components (id, file_id, repository_id, name, type, start_line, end_line, signature, summary, is_exported, parent_name)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
-                        (c["id"], c["file_id"], c["repository_id"], c["name"], c["type"].value if hasattr(c["type"], "value") else c["type"], c["start_line"], c["end_line"], c["signature"], c["summary"])
+                        (
+                            c["id"], c["file_id"], c["repository_id"], c["name"],
+                            c["type"].value if hasattr(c["type"], "value") else c["type"],
+                            c["start_line"], c["end_line"], c["signature"], c["summary"],
+                            1 if c.get("is_exported") else 0,
+                            c.get("parent_name"),
+                        )
                     )
 
                 lines = content.splitlines()
@@ -175,6 +181,23 @@ class AnalysisService:
                         """,
                         (chunk_id, repo_id, file_id, start_i + 1, min(len(lines), start_i + chunk_size), chunk_text, token_estimate)
                     )
+
+            # Extract and persist directory records (one per unique dir in the file set)
+            dir_records = extract_directory_records(repo_id, [m["path"] for m in files_map.values()])
+            for d in dir_records:
+                cursor.execute(
+                    """
+                    INSERT INTO components (id, file_id, repository_id, name, type, start_line, end_line, signature, summary, is_exported, parent_name)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        d["id"], d["file_id"], d["repository_id"], d["name"],
+                        d["type"].value if hasattr(d["type"], "value") else d["type"],
+                        d["start_line"], d["end_line"], d["signature"], d["summary"],
+                        0, d.get("parent_name"),
+                    )
+                )
+            total_components += len(dir_records)
 
             cursor.execute(
                 """

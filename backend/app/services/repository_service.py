@@ -177,7 +177,9 @@ class RepositoryService:
                 startLine=c["start_line"],
                 endLine=c["end_line"],
                 signature=c["signature"],
-                summary=c["summary"]
+                summary=c["summary"],
+                isExported=bool(c["is_exported"]) if c["is_exported"] is not None else False,
+                parentName=c["parent_name"],
             )
             for c in comp_rows
         ]
@@ -225,7 +227,9 @@ class RepositoryService:
                 startLine=c["start_line"],
                 endLine=c["end_line"],
                 signature=c["signature"],
-                summary=c["summary"]
+                summary=c["summary"],
+                isExported=bool(c["is_exported"]) if c["is_exported"] is not None else False,
+                parentName=c["parent_name"],
             )
             for c in rows
         ]
