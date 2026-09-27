@@ -10,12 +10,19 @@ from backend.app.schemas.api import (
 )
 from backend.app.storage.boundary import RepositoryBoundaryValidator, RepositoryBoundaryError
 from backend.app.services.ingestion.ingestion_service import IngestionService
+from backend.app.services.github_service import GithubService
 
 class RepositoryService:
 
     @staticmethod
     def create_repository(conn: sqlite3.Connection, request: RepositoryCreateRequest) -> RepositoryResponse:
-        validated_path = RepositoryBoundaryValidator.validate_repository_root(request.sourcePath)
+        target_path_str = request.sourcePath or ""
+
+        if request.sourceType == "github" or request.githubUrl or target_path_str.startswith("http://") or target_path_str.startswith("https://") or target_path_str.startswith("git@"):
+            github_url = request.githubUrl or target_path_str
+            target_path_str = GithubService.clone_or_fetch(github_url)
+
+        validated_path = RepositoryBoundaryValidator.validate_repository_root(target_path_str)
 
         repo_id = f"repo_{uuid.uuid4().hex[:12]}"
         now = datetime.now(timezone.utc).isoformat()
@@ -112,39 +119,51 @@ class RepositoryService:
         if not files:
             return []
 
-        root_nodes: Dict[str, TreeNodeDTO] = {}
+        nodes_by_path: Dict[str, TreeNodeDTO] = {}
+        root_nodes: List[TreeNodeDTO] = []
 
         for f in files:
             parts = f["path"].split("/")
             curr_path = ""
+            parent_node: Optional[TreeNodeDTO] = None
+
             for i, part in enumerate(parts):
                 is_file = (i == len(parts) - 1)
                 curr_path = f"{curr_path}/{part}" if curr_path else part
-                node_id = f["id"] if is_file else f"dir_{hash(curr_path)}"
 
-                if is_file:
-                    node = TreeNodeDTO(
-                        id=f["id"],
-                        name=part,
-                        path=curr_path,
-                        isDir=False,
-                        language=f["language"],
-                        sizeBytes=f["size_bytes"]
-                    )
+                if curr_path in nodes_by_path:
+                    node = nodes_by_path[curr_path]
                 else:
-                    node = TreeNodeDTO(
-                        id=node_id,
-                        name=part,
-                        path=curr_path,
-                        isDir=True,
-                        children=[]
-                    )
+                    node_id = f["id"] if is_file else f"dir_{abs(hash(curr_path))}"
+                    if is_file:
+                        node = TreeNodeDTO(
+                            id=f["id"],
+                            name=part,
+                            path=curr_path,
+                            isDir=False,
+                            language=f["language"],
+                            sizeBytes=f["size_bytes"]
+                        )
+                    else:
+                        node = TreeNodeDTO(
+                            id=node_id,
+                            name=part,
+                            path=curr_path,
+                            isDir=True,
+                            children=[]
+                        )
+                    nodes_by_path[curr_path] = node
 
-                if i == 0:
-                    if curr_path not in root_nodes:
-                        root_nodes[curr_path] = node
+                    if parent_node is not None:
+                        if parent_node.children is None:
+                            parent_node.children = []
+                        parent_node.children.append(node)
+                    else:
+                        root_nodes.append(node)
 
-        return list(root_nodes.values())
+                parent_node = node
+
+        return root_nodes
 
     @staticmethod
     def get_file_detail(

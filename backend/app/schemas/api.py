@@ -16,8 +16,9 @@ class ErrorResponse(BaseModel):
 # --- Repository Schemas ---
 class RepositoryCreateRequest(BaseModel):
     name: str = Field(..., description="Human-readable repository name")
-    sourceType: str = Field("local_path", description="Source type, e.g. local_path")
-    sourcePath: str = Field(..., description="Absolute filesystem path to repository root")
+    sourceType: str = Field("local_path", description="Source type, e.g. local_path or github")
+    sourcePath: Optional[str] = Field("", description="Absolute filesystem path to repository root (for local repos)")
+    githubUrl: Optional[str] = Field(None, description="GitHub repository URL (for remote GitHub repos)")
 
 class RepositoryCountsDTO(BaseModel):
     filesDiscovered: int = 0

@@ -302,15 +302,23 @@ def _resolve_js_import(specifier: str, current_path: str, path_map: Dict[str, st
     # posixpath.normpath handles ../ correctly
     resolved = posixpath.normpath(posixpath.join(current_dir, specifier))
 
+    base = resolved
+    for ext in (".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"):
+        if base.endswith(ext):
+            base = base[:-len(ext)]
+            break
+
     candidates = [
         resolved,
-        resolved + ".ts",
-        resolved + ".tsx",
-        resolved + ".js",
-        resolved + ".jsx",
-        resolved + "/index.ts",
-        resolved + "/index.tsx",
-        resolved + "/index.js",
+        base,
+        base + ".ts",
+        base + ".tsx",
+        base + ".js",
+        base + ".jsx",
+        base + "/index.ts",
+        base + "/index.tsx",
+        base + "/index.js",
+        base + "/index.jsx",
     ]
     for cand in candidates:
         for rel_path, file_id in path_map.items():
@@ -331,9 +339,17 @@ class RelationshipExtractor:
     Each relationship record contains:
       id              Stable SHA-1-based string ID
       repository_id
-      source_file     Relative path of the file containing the relationship
-      source_line     1-based line number of the statement
+      source_type     Always "file"
+      source_id       File ID of the source file
+      target_type     "file" when the target resolves inside the repo, else "external"
+      target_id       File ID when resolved; otherwise the raw target_spec string
       type            RelationshipType.IMPORTS or RelationshipType.EXPORTS
+      confidence      Always 1.0
+      source_line     1-based line number of the statement
+      evidence        Human-readable string describing the relationship
+
+      -- diagnostic fields (preserved for tooling / debugging) --
+      source_file     Relative path of the file containing the relationship
       target_spec     Raw import specifier or exported symbol name
       target_file     Resolved relative path of the target file (or None)
       target_resolved True when the target file was found in the repository
@@ -377,33 +393,37 @@ class RelationshipExtractor:
                     level = imp["level"]
                     if not module and imp["names"]:
                         module = imp["names"][0]
-                    target_id = _resolve_python_import(module, rel_path, rel_to_id, level)
-                    target_rel = id_to_rel.get(target_id) if target_id else None
+                    resolved_target_id = _resolve_python_import(module, rel_path, rel_to_id, level)
+                    target_rel = id_to_rel.get(resolved_target_id) if resolved_target_id else None
                     # target_spec identifies the target module, not what's imported from it.
                     dots = "." * level
                     target_spec = (dots + module).rstrip(".") or "."
                     relationships.append(cls._make(
                         repo_id=repo_id,
                         rel_type=RelationshipType.IMPORTS,
+                        source_file_id=file_id,
                         source_file=rel_path,
                         source_line=imp["source_line"],
                         target_spec=target_spec,
+                        target_file_id=resolved_target_id,
                         target_file=target_rel,
-                        target_resolved=target_id is not None,
+                        target_resolved=resolved_target_id is not None,
                     ))
 
             elif ext in ("js", "ts", "jsx", "tsx", "mjs", "cjs"):
                 for imp in _js_imports(content):
-                    target_id = _resolve_js_import(imp["module"], rel_path, rel_to_id)
-                    target_rel = id_to_rel.get(target_id) if target_id else None
+                    resolved_target_id = _resolve_js_import(imp["module"], rel_path, rel_to_id)
+                    target_rel = id_to_rel.get(resolved_target_id) if resolved_target_id else None
                     relationships.append(cls._make(
                         repo_id=repo_id,
                         rel_type=RelationshipType.IMPORTS,
+                        source_file_id=file_id,
                         source_file=rel_path,
                         source_line=imp["source_line"],
                         target_spec=imp["module"],
+                        target_file_id=resolved_target_id,
                         target_file=target_rel,
-                        target_resolved=target_id is not None,
+                        target_resolved=resolved_target_id is not None,
                     ))
 
             # ----------------------------------------------------------
@@ -414,9 +434,11 @@ class RelationshipExtractor:
                     relationships.append(cls._make(
                         repo_id=repo_id,
                         rel_type=RelationshipType.EXPORTS,
+                        source_file_id=file_id,
                         source_file=rel_path,
                         source_line=exp["source_line"],
                         target_spec=exp["name"],
+                        target_file_id=file_id,
                         target_file=rel_path,
                         target_resolved=True,
                     ))
@@ -426,9 +448,11 @@ class RelationshipExtractor:
                     relationships.append(cls._make(
                         repo_id=repo_id,
                         rel_type=RelationshipType.EXPORTS,
+                        source_file_id=file_id,
                         source_file=rel_path,
                         source_line=exp["source_line"],
                         target_spec=exp["name"],
+                        target_file_id=file_id,
                         target_file=rel_path,
                         target_resolved=True,
                     ))
@@ -444,18 +468,39 @@ class RelationshipExtractor:
         *,
         repo_id: str,
         rel_type: RelationshipType,
+        source_file_id: str,
         source_file: str,
         source_line: int,
         target_spec: str,
+        target_file_id: Optional[str],
         target_file: Optional[str],
         target_resolved: bool,
     ) -> Dict[str, Any]:
+        # Resolved inside the repo → type "file" + real file ID.
+        # External / unresolved   → type "external" + the raw specifier as ID.
+        # This avoids inventing a fake file ID for unresolved imports while still
+        # satisfying the NOT NULL constraint on target_id in the DB schema.
+        if target_resolved and target_file_id is not None:
+            t_type = "file"
+            t_id = target_file_id
+        else:
+            t_type = "external"
+            t_id = target_spec
+
         return {
             "id": _rel_id(repo_id, source_file, rel_type.value, target_spec, source_line),
             "repository_id": repo_id,
+            # --- columns required by the DB schema / analysis_service.py ---
+            "source_type": "file",
+            "source_id": source_file_id,
+            "target_type": t_type,
+            "target_id": t_id,
             "type": rel_type,
-            "source_file": source_file,
+            "confidence": 1.0,
             "source_line": source_line,
+            "evidence": f"{rel_type.value} {target_spec}",
+            # --- diagnostic fields preserved for tooling / debugging ---
+            "source_file": source_file,
             "target_spec": target_spec,
             "target_file": target_file,
             "target_resolved": target_resolved,

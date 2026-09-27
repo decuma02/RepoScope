@@ -1,29 +1,33 @@
 version: '3.8'
 
 services:
-  reposcope-backend:
+  reposcope:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: reposcope_backend
+    container_name: reposcope
     ports:
       - "8000:8000"
     environment:
       - REPOSCOPE_ENV=production
       - REPOSCOPE_LOG_LEVEL=info
       - REPOSCOPE_DB_PATH=/app/data/index/reposcope.db
+      # IBM Watsonx credentials — supply via a .env file or environment
       - WATSONX_APIKEY=${WATSONX_APIKEY:-}
       - WATSONX_PROJECT_ID=${WATSONX_PROJECT_ID:-}
       - WATSONX_URL=${WATSONX_URL:-https://us-south.ml.cloud.ibm.com}
+      - WATSONX_MODEL_ID=${WATSONX_MODEL_ID:-ibm/granite-13b-chat-v2}
+      # Optional: restrict CORS origins in production
+      # - CORS_ORIGINS=["https://your-domain.com"]
     volumes:
       - reposcope_data:/app/data/index
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
-      interval: 10s
+      interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 5s
+      start_period: 10s
 
 volumes:
   reposcope_data:
