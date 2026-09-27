@@ -106,6 +106,11 @@ class RelationshipListResponse(BaseModel):
     repositoryId: str
     relationships: List[RelationshipDTO]
 
+class NeighborListResponse(BaseModel):
+    repositoryId: str
+    nodeId: str
+    neighborIds: List[str]
+
 class FileDetailResponse(BaseModel):
     id: str
     repositoryId: str
