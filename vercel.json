@@ -6,6 +6,10 @@
     {
       "source": "/api/(.*)",
       "destination": "backend/app/main.py"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }
