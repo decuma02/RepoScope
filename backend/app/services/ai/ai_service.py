@@ -213,12 +213,25 @@ class AIService:
                 prompt = _build_prompt(request.question, context_package)
                 answer_text = _call_watsonx(prompt)
                 confidence = "supported"
+            except httpx.HTTPStatusError as exc:
+                logger.exception("Watsonx HTTP error: %s", exc)
+                error_detail = ""
+                if exc.response is not None:
+                    try:
+                        res_json = exc.response.json()
+                        if isinstance(res_json, dict) and "errors" in res_json and isinstance(res_json["errors"], list) and len(res_json["errors"]) > 0:
+                            error_detail = res_json["errors"][0].get("message", "")
+                    except Exception:
+                        pass
+                    if not error_detail and exc.response.text:
+                        error_detail = exc.response.text
+                if not error_detail:
+                    error_detail = str(exc)
+                answer_text = f"An error occurred while contacting the AI service: {error_detail}"
+                confidence = "error"
             except Exception as exc:  # noqa: BLE001
-                logger.error("Watsonx call failed: %s", exc)
-                answer_text = (
-                    "An error occurred while contacting the AI service. "
-                    "Please try again later."
-                )
+                logger.exception("Watsonx call failed")
+                answer_text = f"An error occurred while contacting the AI service: {exc}"
                 confidence = "error"
 
         # ---- 4. Build response ---------------------------------------------
