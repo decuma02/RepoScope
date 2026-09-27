@@ -66,13 +66,14 @@ export const api = {
 
   getRepository: (id: string) => request<Repository>(`/api/repositories/${id}`),
 
-  createRepository: (payload: { name: string; sourceType?: string; sourcePath: string }) =>
+  createRepository: (payload: { name: string; sourceType?: string; sourcePath?: string; githubUrl?: string }) =>
     request<Repository>("/api/repositories", {
       method: "POST",
       body: JSON.stringify({
         name: payload.name,
         sourceType: payload.sourceType ?? "local_path",
-        sourcePath: payload.sourcePath,
+        sourcePath: payload.sourcePath ?? "",
+        githubUrl: payload.githubUrl,
       }),
     }),
 

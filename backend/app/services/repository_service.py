@@ -10,12 +10,19 @@ from backend.app.schemas.api import (
 )
 from backend.app.storage.boundary import RepositoryBoundaryValidator, RepositoryBoundaryError
 from backend.app.services.ingestion.ingestion_service import IngestionService
+from backend.app.services.github_service import GithubService
 
 class RepositoryService:
 
     @staticmethod
     def create_repository(conn: sqlite3.Connection, request: RepositoryCreateRequest) -> RepositoryResponse:
-        validated_path = RepositoryBoundaryValidator.validate_repository_root(request.sourcePath)
+        target_path_str = request.sourcePath or ""
+
+        if request.sourceType == "github" or request.githubUrl or target_path_str.startswith("http://") or target_path_str.startswith("https://") or target_path_str.startswith("git@"):
+            github_url = request.githubUrl or target_path_str
+            target_path_str = GithubService.clone_or_fetch(github_url)
+
+        validated_path = RepositoryBoundaryValidator.validate_repository_root(target_path_str)
 
         repo_id = f"repo_{uuid.uuid4().hex[:12]}"
         now = datetime.now(timezone.utc).isoformat()

@@ -9,8 +9,10 @@ export function HomePage() {
   const navigate = useNavigate();
   const mock = isMockMode();
   const [repos, setRepos] = useState<Repository[]>([]);
-  const [name, setName] = useState("Local repository");
+  const [sourceType, setSourceType] = useState<"local_path" | "github">("local_path");
+  const [name, setName] = useState("My Repository");
   const [sourcePath, setSourcePath] = useState("");
+  const [githubUrl, setGithubUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -35,7 +37,12 @@ export function HomePage() {
     setBusy(true);
     setError(null);
     try {
-      const repo = await getClient().createRepository({ name, sourcePath });
+      const payload =
+        sourceType === "github"
+          ? { name: name || "GitHub Repository", sourceType: "github", githubUrl, sourcePath: "" }
+          : { name: name || "Local Repository", sourceType: "local_path", sourcePath };
+
+      const repo = await getClient().createRepository(payload);
       try {
         await getClient().analyze(repo.id, false);
       } catch {
@@ -57,32 +64,84 @@ export function HomePage() {
           <img src="/logo-full.png" alt="RepoScope Logo" className="hero-logo-img" />
           <h2>See the repository, then ask it grounded questions.</h2>
           <p>
-            Register a local path, run one-shot analysis, explore files, inspect the focused relationship graph, and
-            chat with answers that cite real source ranges.
+            Register a local directory path or clone a public GitHub repository, run one-shot analysis, explore files, inspect the focused relationship graph, and chat with answers that cite real source ranges.
           </p>
         </section>
         <div className="home-grid">
           <div className="card">
             <h3>Register a repository</h3>
+            
+            {/* Source Type Toggle */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              <button
+                type="button"
+                className={`btn ${sourceType === "local_path" ? "" : "secondary"}`}
+                style={{ flex: 1, fontSize: 12 }}
+                onClick={() => {
+                  setSourceType("local_path");
+                  if (name === "GitHub Repository") setName("Local Repository");
+                }}
+              >
+                💻 Local Directory
+              </button>
+              <button
+                type="button"
+                className={`btn ${sourceType === "github" ? "" : "secondary"}`}
+                style={{ flex: 1, fontSize: 12 }}
+                onClick={() => {
+                  setSourceType("github");
+                  if (name === "Local Repository") setName("GitHub Repository");
+                }}
+              >
+                🐙 GitHub Repository
+              </button>
+            </div>
+
             <form onSubmit={onSubmit}>
               <div className="field">
-                <label htmlFor="repo-name">Name</label>
+                <label htmlFor="repo-name">Repository Name</label>
                 <input id="repo-name" value={name} onChange={(event) => setName(event.target.value)} required />
               </div>
-              <div className="field">
-                <label htmlFor="repo-path">Absolute local path</label>
-                <input
-                  id="repo-path"
-                  value={sourcePath}
-                  onChange={(event) => setSourcePath(event.target.value)}
-                  placeholder="D:\\git\\akhil_repo_list\\work\\RepoScope"
-                  required
-                />
-              </div>
+
+              {sourceType === "local_path" ? (
+                <div className="field">
+                  <label htmlFor="repo-path">Absolute Local Path</label>
+                  <input
+                    id="repo-path"
+                    value={sourcePath}
+                    onChange={(event) => setSourcePath(event.target.value)}
+                    placeholder="e.g. D:\git\my-project"
+                    required
+                  />
+                </div>
+              ) : (
+                <div className="field">
+                  <label htmlFor="repo-url">Public GitHub Repository URL</label>
+                  <input
+                    id="repo-url"
+                    value={githubUrl}
+                    onChange={(event) => {
+                      const val = event.target.value;
+                      setGithubUrl(val);
+                      // Auto infer name from URL if name is generic
+                      if (val && (name === "GitHub Repository" || name === "Local Repository" || !name)) {
+                        const parts = val.replace(/\/$/, "").split("/");
+                        const repoName = parts[parts.length - 1]?.replace(/\.git$/, "");
+                        if (repoName) setName(repoName);
+                      }
+                    }}
+                    placeholder="https://github.com/fastapi/fastapi"
+                    required
+                  />
+                </div>
+              )}
+
               {error ? <p className="error">{error}</p> : null}
-              <button className="btn" disabled={busy} type="submit">
-                {busy ? "Registering…" : "Register & analyze"}
+
+              <button className="btn" disabled={busy} type="submit" style={{ width: "100%", marginTop: 8 }}>
+                {busy ? (sourceType === "github" ? "Cloning & Analyzing…" : "Registering…") : "Register & Analyze"}
               </button>
+
               {!mock ? (
                 <p className="meta" style={{ marginTop: 12 }}>
                   Need a walkthrough without the API?{" "}
@@ -91,6 +150,7 @@ export function HomePage() {
               ) : null}
             </form>
           </div>
+
           <div className="card">
             <h3>Workspaces</h3>
             {loading ? <p className="meta">Loading repositories…</p> : null}

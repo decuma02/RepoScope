@@ -87,7 +87,7 @@ export const mockApi: typeof api = {
       ...DEMO_REPO,
       id: `repo_${Date.now()}`,
       name: payload.name,
-      sourcePath: payload.sourcePath,
+      sourcePath: payload.sourcePath || payload.githubUrl || "/demo/github",
       sourceType: payload.sourceType ?? "local_path",
       status: "CREATED",
       analyzedAt: undefined,
