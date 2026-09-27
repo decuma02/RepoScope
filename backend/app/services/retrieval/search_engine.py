@@ -83,6 +83,10 @@ class RetrievalService:
 
         relationship_evidence: List[RelationshipEvidenceItem] = []
         expanded_file_ids: Set[str] = set(seed_file_ids)
+        # Maps file_id -> maximum confidence-weighted relationship bonus applied to that file.
+        # Used so that SearchResultItem.relationshipBonus reflects actual weighted bonuses,
+        # not a hard-coded constant.
+        file_rel_bonus: Dict[str, float] = {}
 
         if request.relationshipAware and seed_file_ids:
             cursor.execute(
@@ -98,13 +102,17 @@ class RetrievalService:
                 src_id = r["source_id"]
                 tgt_id = r["target_id"]
                 rel_type = r["type"]
+                # Confidence-weighted relationship bonus: confidence * 0.4
+                rel_score = (r["confidence"] or 0.0) * 0.4
 
                 if src_id in seed_file_ids and r["target_type"] == "file":
                     expanded_file_ids.add(tgt_id)
-                    file_scores[tgt_id] = file_scores.get(tgt_id, 0.0) + 0.4
+                    file_scores[tgt_id] = file_scores.get(tgt_id, 0.0) + rel_score
+                    file_rel_bonus[tgt_id] = max(file_rel_bonus.get(tgt_id, 0.0), rel_score)
                 elif tgt_id in seed_file_ids and r["source_type"] == "file":
                     expanded_file_ids.add(src_id)
-                    file_scores[src_id] = file_scores.get(src_id, 0.0) + 0.4
+                    file_scores[src_id] = file_scores.get(src_id, 0.0) + rel_score
+                    file_rel_bonus[src_id] = max(file_rel_bonus.get(src_id, 0.0), rel_score)
 
                 relationship_evidence.append(
                     RelationshipEvidenceItem(
@@ -125,7 +133,7 @@ class RetrievalService:
 
             base_score = file_scores.get(f["id"], 0.1)
             is_seed = f["id"] in seed_file_ids
-            rel_bonus = 0.4 if (is_seed and request.relationshipAware) else (0.4 if request.relationshipAware else 0.0)
+            rel_bonus = file_rel_bonus.get(f["id"], 0.0)
             final_score = min(1.0, base_score + rel_bonus)
 
             # Use matching chunk for excerpt/lines if available; otherwise fall back to first 25 lines
