@@ -1,0 +1,12 @@
+# Netlify configuration file for RepoScope Frontend
+
+[build]
+  base = "frontend"
+  publish = "dist"
+  command = "npm run build"
+
+# SPA Fallback rule for React Router client-side navigation
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
