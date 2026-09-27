@@ -710,3 +710,124 @@ class TestDemoRepoStructure:
         assert "ingestion_service.py" not in dir_names
         assert "extractor.py" not in dir_names
         assert "App.tsx" not in dir_names
+
+
+# ===========================================================================
+# 12. Regression: _find_block_end brace-free single-line arrows
+# ===========================================================================
+
+JS_BRACE_FREE_ARROWS = """\
+const double = (x) => x * 2;
+const triple = (x) => x * 3;
+const square = (x) => x * x;
+"""
+
+JS_MIXED_ARROWS = """\
+const add = (a, b) => a + b;
+
+function greet(name) {
+    return name;
+}
+
+const negate = (x) => -x;
+"""
+
+
+class TestBraceFreeArrow:
+    """BUG: brace-free arrow functions got end_line = start_line + 1 due to
+    depth=0 triggering early return in _find_block_end on the next brace-free line.
+
+    After the fix, brace-free expressions fall through to the conservative
+    ``min(start_idx + 50, total)`` estimate (file-end), which is preferable to
+    the old behaviour of landing exactly on the *next* function's start line.
+    """
+
+    def test_brace_free_arrow_end_not_off_by_one(self):
+        """The previous bug set end_line = start_line + 1, pointing exactly at
+        the next function's start line.  After the fix the fallback uses file-end,
+        so end_line must NOT equal ``start_line + 1`` when another arrow starts
+        on that very next line."""
+        comps = _extract("arrows.js", JS_BRACE_FREE_ARROWS)
+        double = _one(comps, "double")
+        triple = _one(comps, "triple")
+        # Before the fix: double.end_line == 2 == triple.start_line (wrong).
+        # After the fix: end_line is the file end (3), not triple's start (2).
+        assert double["end_line"] != triple["start_line"], (
+            f"double.end_line={double['end_line']} must not equal "
+            f"triple.start_line={triple['start_line']} (off-by-one regression)"
+        )
+
+    def test_brace_free_arrow_end_gte_start(self):
+        comps = _extract("arrows.js", JS_BRACE_FREE_ARROWS)
+        for c in comps:
+            assert c["end_line"] >= c["start_line"]
+
+    def test_mixed_braced_and_brace_free_start_lines(self):
+        """Start-line accuracy is unaffected by the end_line fix."""
+        comps = _extract("mixed.js", JS_MIXED_ARROWS)
+        add = _one(comps, "add")
+        greet = _one(comps, "greet")
+        negate = _one(comps, "negate")
+        assert add["start_line"] == 1
+        assert greet["start_line"] == 3
+        assert negate["start_line"] == 7
+
+    def test_end_line_always_gte_start(self):
+        comps = _extract("arrows.js", JS_BRACE_FREE_ARROWS)
+        for c in comps:
+            assert c["end_line"] >= c["start_line"]
+
+
+# ===========================================================================
+# 13. Regression: _JS_METHOD matches JS keywords (catch, finally) as methods
+# ===========================================================================
+
+JS_WITH_CATCH = """\
+export class Service {
+    process(data) {
+        try {
+            return data.trim();
+        }
+        catch(err) {
+            console.error(err);
+        }
+    }
+
+    validate(input) {
+        return Boolean(input);
+    }
+}
+"""
+
+JS_WITH_FINALLY = """\
+class Resource {
+    open() {
+        try {
+            this.handle = acquire();
+        } finally {
+            cleanup();
+        }
+    }
+}
+"""
+
+
+class TestJSKeywordNotMethod:
+    """BUG: 'catch' and 'finally' were not in the _JS_METHOD skip-list, causing them
+    to be recorded as phantom class methods when they appeared on their own line."""
+
+    def test_catch_not_emitted_as_method(self):
+        comps = _extract("service.js", JS_WITH_CATCH)
+        names = {c["name"] for c in comps if c["type"] == ComponentType.METHOD}
+        assert "catch" not in names, f"'catch' should not appear as a method; methods={names}"
+
+    def test_catch_block_does_not_produce_extra_component(self):
+        comps = _extract("service.js", JS_WITH_CATCH)
+        # Only expected methods: process, validate
+        method_names = {c["name"] for c in comps if c["type"] == ComponentType.METHOD}
+        assert method_names == {"process", "validate"}, f"Unexpected methods: {method_names}"
+
+    def test_finally_not_emitted_as_method(self):
+        comps = _extract("resource.js", JS_WITH_FINALLY)
+        names = {c["name"] for c in comps if c["type"] == ComponentType.METHOD}
+        assert "finally" not in names, f"'finally' should not appear as a method; methods={names}"
