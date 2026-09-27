@@ -16,7 +16,7 @@ export function TopBar({ repo }: { repo?: Repository }) {
       ) : null}
       <header className="topbar">
         <Link className="brand" to="/">
-          <div className="brand-mark" />
+          <img src="/logo-icon.png" alt="RepoScope" className="brand-logo-img" />
           <div>
             <h1>RepoScope</h1>
             <span>Repository intelligence</span>

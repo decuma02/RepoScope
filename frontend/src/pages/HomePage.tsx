@@ -54,6 +54,7 @@ export function HomePage() {
       <TopBar />
       <main className="home">
         <section className="hero">
+          <img src="/logo-full.png" alt="RepoScope Logo" className="hero-logo-img" />
           <h2>See the repository, then ask it grounded questions.</h2>
           <p>
             Register a local path, run one-shot analysis, explore files, inspect the focused relationship graph, and

@@ -65,12 +65,19 @@ a {
   color: inherit;
 }
 
-.brand-mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: conic-gradient(from 180deg, var(--ibm), var(--cyan), var(--ibm));
-  box-shadow: 0 0 18px rgba(15, 98, 254, 0.45);
+.brand-logo-img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(51, 177, 255, 0.45));
+}
+
+.hero-logo-img {
+  height: 68px;
+  width: auto;
+  object-fit: contain;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 0 24px rgba(15, 98, 254, 0.4));
 }
 
 .brand h1 {
