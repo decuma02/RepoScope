@@ -34,6 +34,8 @@ class RetrievalService:
 
         seed_file_ids: Set[str] = set()
         file_scores: Dict[str, float] = {}
+        # Maps file_id -> best matching chunk row (most query terms matched)
+        best_chunks: Dict[str, Any] = {}
 
         for f in file_rows:
             f_path_lower = f["path"].lower()
@@ -51,6 +53,33 @@ class RetrievalService:
                 if term in c_name_lower:
                     file_scores[c["file_id"]] = file_scores.get(c["file_id"], 0.0) + 0.8
                     seed_file_ids.add(c["file_id"])
+
+        # Content-chunk matching: query content_chunks scoped to repo, match terms case-insensitively
+        like_clauses = " OR ".join(["LOWER(text) LIKE ?"] * len(query_terms))
+        like_params = [f"%{term}%" for term in query_terms]
+        cursor.execute(
+            f"SELECT * FROM content_chunks WHERE repository_id = ? AND ({like_clauses})",
+            [repo_id] + like_params,
+        )
+        chunk_rows = cursor.fetchall()
+
+        for chunk in chunk_rows:
+            chunk_text_lower = chunk["text"].lower()
+            term_count = sum(1 for term in query_terms if term in chunk_text_lower)
+            if term_count == 0:
+                continue
+            fid = chunk["file_id"]
+            # Content score: +1.0 per matched query term found in chunk.
+            # Raw accumulation here; final score cap (1.0) is applied at result-build time.
+            content_score = float(term_count)
+            file_scores[fid] = file_scores.get(fid, 0.0) + content_score
+            seed_file_ids.add(fid)
+            # Keep best chunk: most terms matched; tie-break by ROWID (first inserted / lowest id)
+            prev = best_chunks.get(fid)
+            if prev is None:
+                best_chunks[fid] = (term_count, chunk)
+            elif term_count > prev[0]:
+                best_chunks[fid] = (term_count, chunk)
 
         relationship_evidence: List[RelationshipEvidenceItem] = []
         expanded_file_ids: Set[str] = set(seed_file_ids)
@@ -99,13 +128,23 @@ class RetrievalService:
             rel_bonus = 0.4 if (is_seed and request.relationshipAware) else (0.4 if request.relationshipAware else 0.0)
             final_score = min(1.0, base_score + rel_bonus)
 
-            full_path = RepositoryBoundaryValidator.resolve_safe_path(repo_root, f["path"])
-            excerpt = ""
-            try:
-                with open(full_path, 'r', encoding='utf-8', errors='replace') as fp:
-                    excerpt = "".join(fp.readlines()[:25])
-            except Exception:
-                excerpt = "// Unable to read snippet"
+            # Use matching chunk for excerpt/lines if available; otherwise fall back to first 25 lines
+            chunk_entry = best_chunks.get(f["id"])
+            if chunk_entry is not None:
+                _, best_chunk = chunk_entry
+                excerpt = best_chunk["text"]
+                start_line = best_chunk["start_line"]
+                end_line = best_chunk["end_line"]
+            else:
+                full_path = RepositoryBoundaryValidator.resolve_safe_path(repo_root, f["path"])
+                excerpt = ""
+                try:
+                    with open(full_path, 'r', encoding='utf-8', errors='replace') as fp:
+                        excerpt = "".join(fp.readlines()[:25])
+                except Exception:
+                    excerpt = "// Unable to read snippet"
+                start_line = 1
+                end_line = min(25, 200)
 
             results.append(
                 SearchResultItem(
@@ -115,14 +154,14 @@ class RetrievalService:
                     score=round(final_score, 2),
                     lexicalScore=round(base_score, 2),
                     relationshipBonus=round(rel_bonus, 2),
-                    startLine=1,
-                    endLine=min(25, 200),
+                    startLine=start_line,
+                    endLine=end_line,
                     excerpt=excerpt,
                     relevanceReason="Direct query match" if is_seed else "Graph 1-hop relationship match"
                 )
             )
 
-        results.sort(key=lambda x: x.score, reverse=True)
+        results.sort(key=lambda x: (x.score, x.lexicalScore), reverse=True)
         limit = request.limit or 10
 
         return SearchResponse(

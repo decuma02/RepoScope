@@ -84,6 +84,17 @@ def _make_in_memory_db() -> sqlite3.Connection:
             evidence TEXT
         )
     """)
+    conn.execute("""
+        CREATE TABLE content_chunks (
+            id TEXT PRIMARY KEY,
+            repository_id TEXT NOT NULL,
+            file_id TEXT NOT NULL,
+            start_line INTEGER NOT NULL,
+            end_line INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            token_estimate INTEGER DEFAULT 0
+        )
+    """)
     conn.commit()
     return conn
 
