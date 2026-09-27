@@ -68,6 +68,9 @@ def _call_watsonx(prompt: str) -> str:
         },
         timeout=settings.CHAT_TIMEOUT_SECONDS,
     )
+    status_code = getattr(resp, "status_code", None)
+    if isinstance(status_code, int) and status_code >= 400:
+        logger.error("Watsonx response (%d): %s", status_code, getattr(resp, "text", ""))
     resp.raise_for_status()
     data = resp.json()
     return data["results"][0]["generated_text"].strip()
