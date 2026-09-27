@@ -1,13 +1,27 @@
 import os
-from pydantic_settings import BaseSettings
+from typing import Any
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "RepoScope"
     VERSION: str = "0.1.0"
     API_PREFIX: str = "/api"
-    ENVIRONMENT: str = "development"
+    ENVIRONMENT: str = os.getenv("REPOSCOPE_ENV", "development")
     DEBUG: bool = True
-    LOG_LEVEL: str = "INFO"
+    LOG_LEVEL: str = os.getenv("REPOSCOPE_LOG_LEVEL", "INFO")
+
+    # Security & CORS Settings
+    # Accepts either a JSON array or a comma-separated string so Railway env vars work naturally:
+    #   CORS_ORIGINS=https://reposcope.vercel.app,https://preview.vercel.app
+    CORS_ORIGINS: list[str] = ["*"]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
 
     # Watsonx / IBM Granite Credentials Placeholder
     WATSONX_APIKEY: str = ""
@@ -15,8 +29,8 @@ class Settings(BaseSettings):
     WATSONX_URL: str = "https://us-south.ml.cloud.ibm.com"
     WATSONX_MODEL_ID: str = "ibm/granite-13b-chat-v2"
 
-    # Database & Data Paths
-    DATABASE_PATH: str = os.getenv("REPOSCOPE_DB_PATH", os.path.join(os.getcwd(), "data", "index", "reposcope.db"))
+    # Database — Railway: set REPOSCOPE_DB_PATH=/data/reposcope.db and mount a persistent volume to /data.
+    DATABASE_PATH: str = os.getenv("REPOSCOPE_DB_PATH", "/data/reposcope.db")
 
     # Ingestion & Parsing Limits
     MAX_FILE_SIZE_BYTES: int = 1 * 1024 * 1024  # 1 MB default
@@ -99,8 +113,7 @@ class Settings(BaseSettings):
     MAX_CONTEXT_TOKENS: int = 8000
     CHAT_TIMEOUT_SECONDS: int = 60
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
+
