@@ -12,26 +12,23 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = os.getenv("REPOSCOPE_LOG_LEVEL", "INFO")
 
     # Security & CORS Settings
-    # Accepts either a JSON array, comma-separated string, or single string (e.g. CORS_ORIGINS=*)
-    CORS_ORIGINS: Any = ["*"]
+    # Accepts either a single string (*), comma-separated string, or JSON array in env vars
+    CORS_ORIGINS: str = "*"
 
-    @field_validator("CORS_ORIGINS", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, v: Any) -> list[str]:
-        if isinstance(v, str):
-            v_str = v.strip()
-            if v_str.startswith("[") and v_str.endswith("]"):
-                try:
-                    import json
-                    parsed = json.loads(v_str)
-                    if isinstance(parsed, list):
-                        return [str(item).strip() for item in parsed if str(item).strip()]
-                except Exception:
-                    pass
-            return [origin.strip() for origin in v_str.split(",") if origin.strip()]
-        if isinstance(v, list):
-            return [str(item).strip() for item in v if str(item).strip()]
-        return ["*"]
+    @property
+    def cors_origins_list(self) -> list[str]:
+        v_str = str(self.CORS_ORIGINS).strip()
+        if not v_str:
+            return ["*"]
+        if v_str.startswith("[") and v_str.endswith("]"):
+            try:
+                import json
+                parsed = json.loads(v_str)
+                if isinstance(parsed, list):
+                    return [str(item).strip() for item in parsed if str(item).strip()]
+            except Exception:
+                pass
+        return [origin.strip() for origin in v_str.split(",") if origin.strip()]
 
     # Watsonx / IBM Granite Credentials
     WATSONX_APIKEY: str = ""
