@@ -12,23 +12,21 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = os.getenv("REPOSCOPE_LOG_LEVEL", "INFO")
 
     # Security & CORS Settings
-    # Accepts either a single string (*), comma-separated string, or JSON array in env vars
-    CORS_ORIGINS: str = "*"
-
+    # Reads directly from os.environ to bypass pydantic-settings complex decoding completely
     @property
     def cors_origins_list(self) -> list[str]:
-        v_str = str(self.CORS_ORIGINS).strip()
-        if not v_str:
+        raw = os.getenv("CORS_ORIGINS", "*").strip()
+        if not raw or raw == "*":
             return ["*"]
-        if v_str.startswith("[") and v_str.endswith("]"):
+        if raw.startswith("[") and raw.endswith("]"):
             try:
                 import json
-                parsed = json.loads(v_str)
+                parsed = json.loads(raw)
                 if isinstance(parsed, list):
                     return [str(item).strip() for item in parsed if str(item).strip()]
             except Exception:
                 pass
-        return [origin.strip() for origin in v_str.split(",") if origin.strip()]
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
     # Watsonx / IBM Granite Credentials
     WATSONX_APIKEY: str = ""
