@@ -3,6 +3,17 @@ import sqlite3
 from typing import Generator
 from backend.app.core.config import settings
 
+def _migrate_components_table(conn: sqlite3.Connection) -> None:
+    """Add columns introduced in the structure-extraction upgrade (idempotent)."""
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(components)")
+    existing_cols = {row[1] for row in cursor.fetchall()}
+    if "is_exported" not in existing_cols:
+        cursor.execute("ALTER TABLE components ADD COLUMN is_exported INTEGER NOT NULL DEFAULT 0")
+    if "parent_name" not in existing_cols:
+        cursor.execute("ALTER TABLE components ADD COLUMN parent_name TEXT")
+    conn.commit()
+
 def ensure_data_directory():
     db_dir = os.path.dirname(settings.DATABASE_PATH)
     if db_dir and not os.path.exists(db_dir):
@@ -72,6 +83,8 @@ def init_db():
         end_line INTEGER NOT NULL,
         signature TEXT,
         summary TEXT,
+        is_exported INTEGER NOT NULL DEFAULT 0,
+        parent_name TEXT,
         FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
         FOREIGN KEY (repository_id) REFERENCES repositories(id) ON DELETE CASCADE
     )
@@ -131,4 +144,5 @@ def init_db():
     """)
 
     conn.commit()
+    _migrate_components_table(conn)
     conn.close()

@@ -15,9 +15,11 @@ class RelationshipType(str, Enum):
 
 class ComponentType(str, Enum):
     FUNCTION = "function"
+    METHOD = "method"
     CLASS = "class"
     MODULE = "module"
     ENDPOINT = "endpoint"
+    DIRECTORY = "directory"
 
 @dataclass
 class RepositoryCounts:
@@ -61,6 +63,8 @@ class ComponentEntity:
     endLine: int
     signature: Optional[str] = None
     summary: Optional[str] = None
+    isExported: bool = False
+    parentName: Optional[str] = None
 
 @dataclass
 class RelationshipEntity:

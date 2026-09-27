@@ -83,6 +83,8 @@ class ComponentDTO(BaseModel):
     endLine: int
     signature: Optional[str] = None
     summary: Optional[str] = None
+    isExported: bool = False
+    parentName: Optional[str] = None
 
 class ComponentListResponse(BaseModel):
     repositoryId: str
