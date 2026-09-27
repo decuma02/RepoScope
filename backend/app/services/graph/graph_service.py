@@ -66,6 +66,14 @@ class GraphService:
                     path=files[src]["path"],
                     selected=False
                 )
+            elif src not in nodes_map:
+                nodes_map[src] = GraphNode(
+                    id=src,
+                    type="external",
+                    label=src,
+                    path=src,
+                    selected=False
+                )
 
             if tgt in files and tgt not in nodes_map:
                 nodes_map[tgt] = GraphNode(
@@ -73,6 +81,14 @@ class GraphService:
                     type="file",
                     label=files[tgt]["path"].split("/")[-1],
                     path=files[tgt]["path"],
+                    selected=False
+                )
+            elif tgt not in nodes_map:
+                nodes_map[tgt] = GraphNode(
+                    id=tgt,
+                    type="external",
+                    label=tgt,
+                    path=tgt,
                     selected=False
                 )
 

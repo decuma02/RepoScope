@@ -302,15 +302,23 @@ def _resolve_js_import(specifier: str, current_path: str, path_map: Dict[str, st
     # posixpath.normpath handles ../ correctly
     resolved = posixpath.normpath(posixpath.join(current_dir, specifier))
 
+    base = resolved
+    for ext in (".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"):
+        if base.endswith(ext):
+            base = base[:-len(ext)]
+            break
+
     candidates = [
         resolved,
-        resolved + ".ts",
-        resolved + ".tsx",
-        resolved + ".js",
-        resolved + ".jsx",
-        resolved + "/index.ts",
-        resolved + "/index.tsx",
-        resolved + "/index.js",
+        base,
+        base + ".ts",
+        base + ".tsx",
+        base + ".js",
+        base + ".jsx",
+        base + "/index.ts",
+        base + "/index.tsx",
+        base + "/index.js",
+        base + "/index.jsx",
     ]
     for cand in candidates:
         for rel_path, file_id in path_map.items():
