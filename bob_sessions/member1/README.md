@@ -20,5 +20,17 @@
 ### Session 5: Unit Test Suite & Incremental Commit Validation
 ![Session 5 Proof](bob_session_5.png)
 
+### Session 6: Relationship Call Chain & Idempotency Analysis
+![Session 6 Proof](bob_session_6.png)
+
+### Session 7: Retrieval Data Contract & File ID Lookup Fixes
+![Session 7 Proof](bob_session_7.png)
+
+### Session 8: Relationship Index Query Methods & Schemas
+![Session 8 Proof](bob_session_8.png)
+
+### Session 9: Production Deployment Readiness & Workspace Layout Bounding
+![Session 9 Proof](bob_session_9.png)
+
 ---
 *All session transcripts, automated task lists, and commit histories verified and pushed to main.*
