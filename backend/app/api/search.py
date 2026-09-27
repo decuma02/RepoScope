@@ -1,3 +1,18 @@
+"""
+search.py — Semantic/lexical search and retrieval comparison endpoints.
+
+Routes (prefixed with ``/api/v1/repositories/{id}``):
+  POST /search            – Relationship-aware code search against a READY repository.
+                            Returns ranked ``SearchResultItem`` chunks with lexical
+                            and relationship-bonus scores.
+  POST /compare-retrieval – Side-by-side comparison of relationship-aware vs
+                            plain text-only retrieval for the same query.  Useful
+                            for demonstrating the value of the graph expansion step.
+
+Both endpoints require the repository to be in READY status; in-progress or
+unanalysed repositories return HTTP 409.
+"""
+
 import sqlite3
 from fastapi import APIRouter, Depends, HTTPException, status
 from backend.app.core.database import get_db

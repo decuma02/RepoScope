@@ -1,3 +1,20 @@
+"""
+main.py — FastAPI application factory and entrypoint for RepoScope.
+
+Responsibilities:
+  - Creates and configures the FastAPI ``app`` instance.
+  - Registers CORS middleware with origins read from ``settings.CORS_ORIGINS``.
+  - Attaches a unified exception handler that normalises both HTTPException and
+    unexpected Python exceptions into a consistent JSON error envelope.
+  - Mounts the five feature routers (repositories, analysis, search, chat, graph)
+    under the configured API prefix (default: ``/api/v1``).
+  - In production (when ``frontend/dist`` is present), serves the compiled Vite
+    SPA and its static assets so a single process handles both API and UI.
+
+Vercel serverless entrypoint: ``api/index.py`` imports ``app`` from here.
+Local dev: ``uvicorn backend.app.main:app --reload``
+"""
+
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -16,6 +33,11 @@ from backend.app.schemas.api import ErrorResponse, ErrorDetail
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Application lifespan handler.
+
+    Runs ``init_db()`` on startup to create all SQLite tables if they do not
+    exist yet (idempotent DDL).  No teardown logic is required.
+    """
     init_db()
     yield
 
@@ -41,6 +63,13 @@ app.add_middleware(
 @app.exception_handler(HTTPException)
 @app.exception_handler(Exception)
 async def custom_exception_handler(request: Request, exc: Exception):
+    """Global exception handler — normalises all errors to the standard envelope.
+
+    HTTPException detail may be either a plain string or a structured dict
+    with ``code``, ``message``, and ``details`` keys.  Unhandled Python
+    exceptions become HTTP 500 responses with ``INTERNAL_ERROR`` codes.
+    A unique ``requestId`` is generated for every error to aid log correlation.
+    """
     req_id = f"req_{uuid.uuid4().hex[:12]}"
 
     if isinstance(exc, HTTPException):
@@ -72,6 +101,11 @@ async def custom_exception_handler(request: Request, exc: Exception):
 
 @app.get("/health", tags=["Health"])
 def health_check():
+    """Liveness probe endpoint.
+
+    Returns the running version, project name, and deployment environment.
+    Used by Vercel health checks and monitoring tools.
+    """
     return {"status": "ok", "version": settings.VERSION, "project": settings.PROJECT_NAME, "environment": settings.ENVIRONMENT}
 
 app.include_router(repositories_router, prefix=settings.API_PREFIX)
@@ -89,6 +123,18 @@ if os.path.exists(frontend_dist):
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
+        """SPA catch-all route for production self-hosted deployments.
+
+        Serves static assets directly when a matching file exists inside
+        ``frontend/dist``.  All other paths return ``index.html`` so that
+        React Router can handle client-side navigation.
+
+        API, docs, and health paths are excluded and return 404 so they are
+        never accidentally handled as SPA routes.
+
+        Note: On Vercel this route is never hit because ``vercel.json`` handles
+        static file serving and SPA fallback at the CDN/edge layer.
+        """
         if (
             full_path.startswith("api/")
             or full_path == "health"

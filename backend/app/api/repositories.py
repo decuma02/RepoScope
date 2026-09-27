@@ -1,3 +1,25 @@
+"""
+repositories.py — REST endpoints for repository CRUD and relationship graph queries.
+
+All routes are prefixed with ``/api/v1/repositories`` (or the value of
+``settings.API_PREFIX + '/repositories'``).
+
+Endpoints:
+  POST   /                              – Register a new repository (local or GitHub)
+  GET    /                              – List all registered repositories
+  GET    /{id}                          – Retrieve a single repository by ID
+  GET    /{id}/tree                     – Return the file tree of a repository
+  GET    /{id}/files/{file_id}          – Get file content, metadata and components
+  GET    /{id}/components               – List all extracted code components
+  GET    /{id}/relationships            – List all dependency relationships
+  GET    /{id}/relationships/nodes/{node_id}/outgoing  – Outgoing edges for a node
+  GET    /{id}/relationships/nodes/{node_id}/incoming  – Incoming edges for a node
+  GET    /{id}/relationships/nodes/{node_id}/neighbors – One-hop neighbour IDs
+  GET    /{id}/relationships/by-type/{rel_type}        – Filter edges by type
+  GET    /{id}/files/{file_id}/relationships           – Edges touching a file
+  POST   /{id}/reset                    – Wipe all analysis data for a repository
+"""
+
 import sqlite3
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query

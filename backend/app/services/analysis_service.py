@@ -1,3 +1,35 @@
+"""
+analysis_service.py — Orchestrates the four-stage code analysis pipeline.
+
+The pipeline is the core intelligence layer of RepoScope:
+
+  Stage 1 – DISCOVERY
+    ``RepositoryDiscovery.discover_files`` walks the repository tree and
+    collects all analysable files, skipping binaries, large files, and
+    entries matched by the ignore-list.
+
+  Stage 2 – PARSING_STRUCTURE
+    For each file: read content → ``StructureExtractor.extract_components``
+    identifies named symbols (functions, classes, endpoints, …) → chunk
+    content into 30-line ``content_chunks`` rows for retrieval.
+    Directory records (synthetic DIRECTORY components) are also inserted here.
+
+  Stage 3 – EXTRACTING_RELATIONSHIPS
+    ``RelationshipExtractor.extract_relationships`` inspects import statements
+    and cross-file call sites to build directed IMPORTS / USES / EXPORTS edges.
+
+  Stage 4 – COMPLETED
+    Aggregate counts are written back to ``repositories`` and ``analysis_jobs``
+    rows; status transitions to READY.
+
+On any unhandled exception the job transitions to FAILED and the error
+message is persisted to ``analysis_jobs.error_message``.
+
+A ``ThreadPoolExecutor`` (max 4 workers) is available for async execution;
+however the default API path runs the pipeline synchronously in the request
+thread to keep the Vercel serverless runtime simple.
+"""
+
 import uuid
 import json
 import sqlite3
@@ -18,6 +50,23 @@ class AnalysisService:
 
     @staticmethod
     def trigger_analysis(conn: sqlite3.Connection, repo_id: str, force: bool = False, run_async: bool = False) -> Optional[AnalysisJobResponse]:
+        """Create an analysis job and optionally run the pipeline.
+
+        If the repository is already ANALYZING and ``force`` is False, the
+        existing in-progress job is returned without creating a duplicate.
+
+        Args:
+            conn:      Active SQLite connection.
+            repo_id:   Target repository ID.
+            force:     When True, always create a new job even if one is running.
+            run_async: When True, submit the pipeline to the thread pool and
+                       return immediately; when False (default) the pipeline
+                       runs synchronously before this method returns.
+
+        Returns:
+            ``AnalysisJobResponse`` for the new or existing job, or ``None``
+            if the repository does not exist.
+        """
         cursor = conn.cursor()
 
         cursor.execute("SELECT * FROM repositories WHERE id = ?", (repo_id,))
@@ -56,6 +105,11 @@ class AnalysisService:
 
     @staticmethod
     def _async_worker(repo_id: str, job_id: str, root_path: str):
+        """Thread-pool worker that opens its own DB connection and runs the pipeline.
+
+        A fresh connection is required because SQLite connections are not
+        thread-safe.  The connection is always closed in the ``finally`` block.
+        """
         conn = get_db_connection()
         try:
             AnalysisService.run_analysis_pipeline(conn, repo_id, job_id, root_path)
@@ -64,6 +118,11 @@ class AnalysisService:
 
     @staticmethod
     def get_job_status(conn: sqlite3.Connection, job_id: str) -> Optional[AnalysisJobResponse]:
+        """Fetch the current state of a single analysis job by its ID.
+
+        Returns ``None`` if no job row exists with the given ``job_id``.
+        The ``warnings`` JSON column is decoded to a Python list before returning.
+        """
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM analysis_jobs WHERE id = ?", (job_id,))
         row = cursor.fetchone()
@@ -91,6 +150,20 @@ class AnalysisService:
 
     @staticmethod
     def run_analysis_pipeline(conn: sqlite3.Connection, repo_id: str, job_id: str, root_path: str):
+        """Execute the full four-stage analysis pipeline within a single DB connection.
+
+        This method is the primary entry point for both the synchronous and async
+        execution paths.  It mutates the ``analysis_jobs`` and ``repositories`` rows
+        throughout execution to reflect real-time progress.
+
+        Data written per stage:
+          - Stage 1: ``files_discovered``, ``files_skipped``, initial ``warnings``.
+          - Stage 2: ``files`` rows, ``components`` rows, ``content_chunks`` rows.
+          - Stage 3: ``relationships`` rows.
+          - Stage 4: Final counts, ``status=READY``, ``completed_at`` timestamp.
+
+        On exception: job status → FAILED, ``error_message`` is persisted.
+        """
         cursor = conn.cursor()
 
         try:

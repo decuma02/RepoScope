@@ -5,6 +5,21 @@ import { ApiError } from "../api/client";
 import { TopBar } from "../components/layout/TopBar";
 import type { Repository } from "../types/reposcope";
 
+/**
+ * HomePage — Landing page and repository registration hub.
+ *
+ * Responsibilities:
+ *   - Displays the hero banner and RepoScope branding.
+ *   - Provides a form to register a new repository (local path or GitHub URL).
+ *   - Supports toggling between "local_path" and "github" source types;
+ *     switching auto-fills a sensible default repository name.
+ *   - On submit: calls ``createRepository`` → triggers ``analyze`` →
+ *     navigates to ``/workspace/:id``.
+ *   - Lists the 5 most-recently registered workspaces from the API
+ *     (auto-refreshes on mock mode toggle).
+ *   - Renders in mock mode when ``?mock=1`` is in the URL, showing fixture data
+ *     without a running backend.
+ */
 export function HomePage() {
   const navigate = useNavigate();
   const mock = isMockMode();
@@ -32,6 +47,13 @@ export function HomePage() {
       .finally(() => setLoading(false));
   }, [mock]);
 
+  /**
+   * Form submit handler.
+   *
+   * Builds the correct request payload for the selected source type, posts it
+   * to the backend, fires analysis immediately, then navigates to the workspace.
+   * Displays an inline error banner if any step fails.
+   */
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);

@@ -1,3 +1,18 @@
+"""
+graph.py — Focused relationship-graph query endpoint.
+
+Route (prefixed with ``/api/v1/repositories/{id}``):
+  GET /graph  – Return a focused sub-graph (nodes + edges) for visualisation.
+               Optional query params:
+                 ``nodeId``    – centre the graph on a specific node
+                 ``sourceIds`` – seed the graph from a list of node IDs
+               Without params the endpoint returns the entire graph (up to a
+               configurable limit defined in GraphService).
+
+The response is consumed by the frontend GraphVisualizer component which
+renders the graph using a force-directed layout.
+"""
+
 import sqlite3
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query

@@ -12,6 +12,13 @@ import { SearchPanel } from "../components/search/SearchPanel";
 import { WorkspaceProvider, useWorkspace, type WorkspaceTab } from "../context/WorkspaceContext";
 import type { AnalysisJob, Repository, TreeNode } from "../types/reposcope";
 
+/**
+ * WorkspacePage — Top-level shell that wraps the workspace in its context provider.
+ *
+ * ``WorkspaceProvider`` supplies the active tab state (graph / code / chat / search)
+ * to all child components without prop-drilling.  The actual content is rendered
+ * by ``WorkspaceInner`` which has access to the context.
+ */
 export function WorkspacePage() {
   return (
     <WorkspaceProvider>
@@ -20,6 +27,21 @@ export function WorkspacePage() {
   );
 }
 
+/**
+ * WorkspaceInner — Three-panel workspace layout for a single repository.
+ *
+ * Layout:
+ *   Left panel   – ``FileTree`` explorer sidebar (scrollable)
+ *   Center panel – Tab bar (graph | code | chat | search) + active view
+ *   Right panel  – ``RepoOverview`` stats and analysis controls
+ *
+ * Data fetching:
+ *   - On mount: fetches repo metadata, latest job status, and (if READY) file tree.
+ *   - While ANALYZING: polls ``/status`` every 1.5 s via ``setInterval``;
+ *     the interval is cleared when status leaves ANALYZING.
+ *
+ * The ``repoId`` path parameter is sourced from React Router’s ``useParams``.
+ */
 function WorkspaceInner() {
   const { repoId } = useParams();
   const { tab, setTab } = useWorkspace();
@@ -28,6 +50,12 @@ function WorkspaceInner() {
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * Refresh callback — fetches the latest repository, job status, and file tree.
+   *
+   * Memoised with ``useCallback`` on ``repoId`` so the polling ``useEffect``
+   * does not re-register the interval on every render.
+   */
   const refresh = useCallback(async () => {
     if (!repoId) return;
     const client = getClient();

@@ -1,3 +1,26 @@
+"""
+repository_service.py — Data-access and orchestration layer for repository entities.
+
+Provides static methods that read/write the ``repositories``, ``files``,
+``components``, ``relationships``, and ``content_chunks`` SQLite tables.
+
+Key responsibilities:
+  - ``create_repository``  : validate path / clone GitHub URL, INSERT the
+    repository row, and immediately run a lightweight file discovery pass
+    so the file tree is available before full analysis.
+  - ``get_repository``     : fetch a single repository row and map it to
+    a ``RepositoryResponse`` Pydantic model.
+  - ``get_all_repositories``: list all repositories ordered by creation time.
+  - ``get_tree``           : build a recursive ``TreeNodeDTO`` hierarchy from
+    flat file rows, suitable for rendering a file-explorer sidebar.
+  - ``get_file_detail``    : load file metadata, its extracted components, and
+    a line-range excerpt from the raw source file on disk.
+  - ``get_components``     : query all (or type-filtered) component rows.
+  - ``get_relationships``  : query all (or type-filtered) relationship rows.
+  - ``reset_repository``   : delete all analysis artefacts and reset counts
+    so the repository can be re-analysed from scratch.
+"""
+
 import uuid
 from datetime import datetime, timezone
 import sqlite3
@@ -16,6 +39,30 @@ class RepositoryService:
 
     @staticmethod
     def create_repository(conn: sqlite3.Connection, request: RepositoryCreateRequest) -> RepositoryResponse:
+        """Register a new repository and perform an initial file discovery pass.
+
+        For GitHub source types the URL is first passed to ``GithubService.clone_or_fetch``
+        which performs a shallow ``git clone`` (or ZIP archive download as fallback)
+        into ``data/clones/<owner>__<repo>/``.
+
+        The resolved local path is then validated by ``RepositoryBoundaryValidator``
+        to ensure it is a real directory and does not escape allowed roots.
+
+        After the database row is inserted, ``IngestionService.ingest_repository``
+        walks the directory tree and stores file records so the explorer sidebar
+        is immediately populated without waiting for full analysis.
+
+        Args:
+            conn:    Active SQLite connection (obtained via ``get_db`` dependency).
+            request: Validated ``RepositoryCreateRequest`` from the HTTP body.
+
+        Returns:
+            ``RepositoryResponse`` with the new repository ID, metadata, and
+            discovery counts (``filesDiscovered``, ``filesSkipped``).
+
+        Raises:
+            ``RepositoryBoundaryError``: if the path is invalid or outside roots.
+        """
         target_path_str = request.sourcePath or ""
 
         if request.sourceType == "github" or request.githubUrl or target_path_str.startswith("http://") or target_path_str.startswith("https://") or target_path_str.startswith("git@"):
@@ -60,6 +107,11 @@ class RepositoryService:
 
     @staticmethod
     def get_repository(conn: sqlite3.Connection, repo_id: str) -> Optional[RepositoryResponse]:
+        """Fetch a single repository row by its ID.
+
+        Returns ``None`` if no row with the given ``repo_id`` exists;
+        the caller is responsible for converting ``None`` to a 404 response.
+        """
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM repositories WHERE id = ?", (repo_id,))
         row = cursor.fetchone()
@@ -86,6 +138,7 @@ class RepositoryService:
 
     @staticmethod
     def get_all_repositories(conn: sqlite3.Connection) -> List[RepositoryResponse]:
+        """Return all registered repositories ordered newest-first."""
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM repositories ORDER BY created_at DESC")
         rows = cursor.fetchall()
@@ -112,6 +165,16 @@ class RepositoryService:
 
     @staticmethod
     def get_tree(conn: sqlite3.Connection, repo_id: str) -> List[TreeNodeDTO]:
+        """Build a recursive file-tree from flat file rows in the database.
+
+        Iterates over all file paths for the repository (sorted alphabetically)
+        and assembles a hierarchy of ``TreeNodeDTO`` objects where intermediate
+        directory segments become synthetic directory nodes.  The resulting list
+        contains only top-level nodes; children are nested inside each directory
+        node’s ``children`` list.
+
+        Returns an empty list if the repository has no indexed files yet.
+        """
         cursor = conn.cursor()
         cursor.execute("SELECT id, path, language, size_bytes FROM files WHERE repository_id = ? ORDER BY path ASC", (repo_id,))
         files = cursor.fetchall()
@@ -173,6 +236,17 @@ class RepositoryService:
         start_line: Optional[int] = 1,
         end_line: Optional[int] = None
     ) -> Optional[FileDetailResponse]:
+        """Return full detail for a file including its components and a source excerpt.
+
+        Reads the raw file from disk using the repository’s ``source_path`` and
+        the file’s relative ``path``.  The excerpt window defaults to 200 lines
+        starting at ``start_line`` unless ``end_line`` is provided.
+
+        If the file cannot be read (permissions, deleted, binary), the excerpt
+        is set to ``"// Unable to read file excerpt"`` rather than raising an error.
+
+        Returns ``None`` when either the file row or repository row is missing.
+        """
         cursor = conn.cursor()
 
         cursor.execute("SELECT * FROM files WHERE id = ? AND repository_id = ?", (file_id, repo_id))
@@ -231,6 +305,12 @@ class RepositoryService:
 
     @staticmethod
     def get_components(conn: sqlite3.Connection, repo_id: str, comp_type: Optional[str] = None) -> ComponentListResponse:
+        """Return all extracted code components for a repository.
+
+        Args:
+            comp_type: Optional ``ComponentType`` value string (e.g. ``"function"``)
+                       to filter results.  Returns all types when ``None``.
+        """
         cursor = conn.cursor()
         if comp_type:
             cursor.execute("SELECT * FROM components WHERE repository_id = ? AND type = ?", (repo_id, comp_type))
@@ -256,6 +336,12 @@ class RepositoryService:
 
     @staticmethod
     def get_relationships(conn: sqlite3.Connection, repo_id: str, rel_type: Optional[str] = None) -> RelationshipListResponse:
+        """Return all dependency edges for a repository.
+
+        Args:
+            rel_type: Optional ``RelationshipType`` value string
+                      (e.g. ``"IMPORTS"``) to filter results.
+        """
         cursor = conn.cursor()
         if rel_type:
             cursor.execute("SELECT * FROM relationships WHERE repository_id = ? AND type = ?", (repo_id, rel_type))
@@ -281,6 +367,17 @@ class RepositoryService:
 
     @staticmethod
     def reset_repository(conn: sqlite3.Connection, repo_id: str) -> bool:
+        """Delete all analysis artefacts for a repository and reset its status to CREATED.
+
+        Removes rows from ``files``, ``components``, ``content_chunks``,
+        ``relationships``, and ``analysis_jobs`` tables, then resets all numeric
+        counters on the repository row.  The repository record itself is kept so
+        the same ID can be re-analysed.
+
+        Returns:
+            Always ``True`` on success (the caller raises HTTP 404 before calling
+            this if the repository does not exist).
+        """
         cursor = conn.cursor()
         cursor.execute("DELETE FROM files WHERE repository_id = ?", (repo_id,))
         cursor.execute("DELETE FROM components WHERE repository_id = ?", (repo_id,))
