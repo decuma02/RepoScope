@@ -15,7 +15,6 @@ venv/
 data_store/
 bob_sessions/
 bob_tasks/
-demo/
 
 # IDE files
 .vscode/
